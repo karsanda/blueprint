@@ -43,11 +43,11 @@ Covers: Basic Flow, Alternative Flow 1, Alternative Flow 2, Alternative Flow 3, 
 
 Work items:
 
-- [ ] Learn each session's status from Claude Code
-- [ ] Mark the tab, the pane and the title bar
-- [ ] Notify through the Operating system when the window is not in front
-- [ ] Focus the session when the Developer clicks the notification
-- [ ] Mark the session idle when the Developer refuses or stops Claude Code
+- [x] Learn each session's status from Claude Code
+- [x] Mark the tab, the pane and the title bar
+- [x] Notify through the Operating system when the window is not in front
+- [x] Focus the session when the Developer clicks the notification
+- [x] Mark the session idle when the Developer refuses or stops Claude Code
 
 Test cases:
 

@@ -58,8 +58,23 @@ Checked on 2026-11-21 with a real session whose hooks logged every event:
 - `PostToolUse` never clears Needs you. A parallel tool can finish while a prompt for another tool is still open.
 - The transcript format is not documented. Blueprint relies only on the interrupt text, and only on lines added after it starts following the file. The interrupt is a `user` entry whose content is a list of text parts. A prompt is stored as plain text, so a prompt with the same words does not count.
 
+- The file watcher takes its own first reading a moment after following starts. So the follower does one catch-up read after one poll interval. Without it, growth in that gap is never reported.
+
+### Checked in the real app
+
+Checked on 2026-11-21 with the built app, Claude Code 2.1.330 in manual mode, and the window treated as not in front:
+
+- A permission prompt showed Needs you on the tab, the pane and the title bar. The prompt stayed open, so the hook did not answer it.
+- The app recorded one notification, with the intended copy, for each change to Needs you.
+- Approving with Enter showed Working at once, through the typing rule. Idle followed when the turn ended.
+- Refusing with Esc reached Idle in about 0.2 seconds, through the transcript. Esc mid-turn took about 0.3 seconds.
+- An `AskUserQuestion` question showed Needs you, and answering it showed Working, then Idle.
+- The session stayed Idle for 75 seconds after a turn, so `idle_prompt` is ignored.
+- The folder's own hooks still ran beside Blueprint's.
+
 ## Open checks
 
+- A real desktop notification on GNOME, and clicking it to focus the session, is not yet verified by hand.
 - Managed settings can block Blueprint's hooks (`allowedHttpHookUrls`, `allowManagedHooksOnly`). The sessions then never change status.
 - `elicitation_dialog` (an MCP server asking for input) is untested. It may fire `PermissionRequest` too.
-- The merge check used a folder's settings, not the Developer's `~/.claude/settings.json`. Both go through the same merge, so it should hold.
+- The merge check used a folder's settings, not the Developer's `~/.claude/settings.json`. Both go through the same merge, so it should hold. The real-app check used a folder's settings again.
