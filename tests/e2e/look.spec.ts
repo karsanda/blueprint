@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { launch, probeSize, probeText, typeInto } from './launch'
+import { gitFolder, launch, probeSize, probeText, typeInto } from './launch'
 
 test('tabs and panes use the Blueprint look', async () => {
   const { app, page } = await launch()
@@ -67,5 +67,16 @@ test('a session that needs the Developer stands out', async () => {
     wait,
   )
   expect(await pane.evaluate((el) => getComputedStyle(el).boxShadow)).toContain(wait)
+  await app.close()
+})
+
+test("Claude's changes carry a revision cloud in the agent colour", async () => {
+  const { app, page } = await launch({ folder: gitFolder() })
+  await expect.poll(() => probeText(page, 'claude-1')).toContain('claude ready')
+  await typeInto(page, 'claude-1', 'pe')
+  await page.locator('[data-tab="changes"] [data-path="notes.txt"]').click()
+  const cloud = page.locator('[data-tab="difference"] svg.bp-cloud path')
+  await expect(cloud).toHaveAttribute('d', /^M8 8/)
+  expect(await cloud.evaluate((el) => getComputedStyle(el).stroke)).toBe('rgb(255, 209, 102)')
   await app.close()
 })

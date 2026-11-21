@@ -206,3 +206,75 @@
   font-size: 10.5px;
   color: var(--bp-muted);
 }
+
+/* The Difference pane: one row per line, a revision cloud round each block Claude changed. */
+.bp-diff {
+  --bp-code-foreground: var(--bp-ink);
+  --bp-code-background: transparent;
+  --bp-code-token-constant: var(--bp-you);
+  --bp-code-token-string: var(--bp-ok);
+  --bp-code-token-comment: var(--bp-muted);
+  --bp-code-token-keyword: var(--bp-wait);
+  --bp-code-token-parameter: var(--bp-ink);
+  --bp-code-token-function: var(--bp-agent);
+  --bp-code-token-string-expression: var(--bp-ok);
+  --bp-code-token-punctuation: var(--bp-muted);
+  --bp-code-token-link: var(--bp-you);
+}
+.bp-diff-path {
+  margin-bottom: 6px;
+  font: 600 11px var(--bp-font-mono);
+  color: var(--bp-head);
+}
+.bp-diff-rows {
+  min-width: max-content;
+  padding: 0 20px 0 20px;
+  font: 11px/1.5 var(--bp-font-mono);
+}
+.bp-chg {
+  position: relative;
+  margin: 12px 0;
+}
+.bp-cloud {
+  position: absolute;
+  pointer-events: none;
+  overflow: visible;
+}
+.bp-cloud path {
+  fill: none;
+  stroke: var(--bp-agent);
+  stroke-width: 1.6px;
+  stroke-linejoin: round;
+}
+.bp-diff-row {
+  display: flex;
+  white-space: pre;
+}
+.bp-diff-row[data-kind='add'] {
+  background: color-mix(in srgb, var(--bp-add) 16%, transparent);
+}
+.bp-diff-row[data-kind='del'] {
+  background: color-mix(in srgb, var(--bp-del) 16%, transparent);
+}
+.bp-diff-row[data-kind='hunk'] {
+  color: var(--bp-muted);
+}
+.bp-diff-num {
+  flex: none;
+  width: 3.5ch;
+  padding-right: 1ch;
+  text-align: right;
+  color: var(--bp-muted);
+  user-select: none;
+}
+.bp-diff-sign {
+  flex: none;
+  width: 2ch;
+  color: var(--bp-muted);
+}
+.bp-diff-row[data-kind='add'] .bp-diff-sign {
+  color: var(--bp-add);
+}
+.bp-diff-row[data-kind='del'] .bp-diff-sign {
+  color: var(--bp-del);
+}

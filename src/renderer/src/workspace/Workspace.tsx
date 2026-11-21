@@ -7,7 +7,7 @@ import {
   type IDockviewPanelHeaderProps,
 } from 'dockview-react'
 import { ChangesPanel } from '../review/ChangesPanel'
-import { DifferencePlaceholder } from '../review/DifferencePlaceholder'
+import { DifferencePanel } from '../review/DifferencePanel'
 import { StatusLight } from '../status/StatusLight'
 import { installNotifications } from '../status/notify'
 import { installTitle } from '../status/title'
@@ -19,7 +19,7 @@ const blueprintTheme: DockviewTheme = { name: 'blueprint', className: 'dockview-
 const components = {
   terminal: TerminalPanel,
   changes: ChangesPanel,
-  difference: DifferencePlaceholder,
+  difference: DifferencePanel,
 }
 
 /**

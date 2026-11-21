@@ -1,4 +1,4 @@
-import { appendFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
+import { appendFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, type Page, test } from '@playwright/test'
 import type { ReviewState } from '../../src/shared/api'
@@ -207,4 +207,60 @@ test('the review stops refreshing while the Changes pane is hidden', async () =>
   expect(await listed()).not.toContain('README.md')
   await page.locator('.dv-tab', { hasText: 'Changes' }).click()
   await expect.poll(listed, { timeout: 5000 }).toContain('README.md')
+})
+
+const diffRows = (page: Page, kind: 'add' | 'del') =>
+  page.locator(`[data-tab="difference"] .bp-diff-row[data-kind="${kind}"]`)
+const pick = (page: Page, path: string) => page.locator(`[data-tab="changes"] [data-path="${path}"]`).click()
+
+test('picking a listed file shows its added and removed lines', async () => {
+  const { page } = await launch({ folder: gitFolder() })
+  await readyClaude(page)
+  await typeInto(page, 'claude-1', 'pe')
+  await pick(page, 'notes.txt')
+  await expect(diffRows(page, 'del')).toContainText('notes: first line')
+  await expect(diffRows(page, 'add')).toContainText('notes: changed by Claude')
+  await expect(page.locator('[data-tab="difference"] svg.bp-cloud')).toHaveCount(1)
+})
+
+test('a change outside Claude has no revision cloud', async () => {
+  const folder = gitFolder()
+  const { page, log } = await launch({ folder })
+  await readyClaude(page)
+  await typeInto(page, 'claude-1', 'p')
+  await expect.poll(() => readLog(log, 'claude.hooks')).toContain('UserPromptSubmit 204')
+  writeFileSync(join(folder, 'README.md'), '# Test Folder\n\nEdited by the Developer.\n')
+  await pick(page, 'README.md')
+  await expect(diffRows(page, 'add')).toContainText('Edited by the Developer.')
+  await expect(page.locator('[data-tab="difference"] svg.bp-cloud')).toHaveCount(0)
+})
+
+test('the difference follows a file that changes again', async () => {
+  const folder = gitFolder()
+  const { page } = await launch({ folder })
+  await readyClaude(page)
+  await typeInto(page, 'claude-1', 'pe')
+  await pick(page, 'notes.txt')
+  await expect(diffRows(page, 'add')).toContainText('notes: changed by Claude')
+  appendFileSync(join(folder, 'notes.txt'), 'notes: third line\n')
+  await expect(diffRows(page, 'add').filter({ hasText: 'notes: third line' })).toHaveCount(1, {
+    timeout: 5000,
+  })
+})
+
+test('a new file and a deleted file show whole, and a binary file says so', async () => {
+  const folder = gitFolder()
+  const { page, log } = await launch({ folder })
+  await readyClaude(page)
+  await typeInto(page, 'claude-1', 'p')
+  await expect.poll(() => readLog(log, 'claude.hooks')).toContain('UserPromptSubmit 204')
+  writeFileSync(join(folder, 'new.txt'), 'alpha\nbeta\n')
+  await pick(page, 'new.txt')
+  await expect(diffRows(page, 'add')).toHaveCount(2)
+  rmSync(join(folder, 'README.md'))
+  await pick(page, 'README.md')
+  await expect(diffRows(page, 'del')).toHaveCount(3)
+  writeFileSync(join(folder, 'image.bin'), Buffer.from([0, 1, 0, 2, 0, 3]))
+  await pick(page, 'image.bin')
+  await expect(page.locator('[data-tab="difference"]')).toContainText('Binary file.')
 })

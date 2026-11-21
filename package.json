@@ -46,6 +46,7 @@
     "oxlint-tsgolint": "7.0.2007",
     "react": "19.3.1",
     "react-dom": "19.3.1",
+    "shiki": "4.6.0",
     "tailwind-merge": "3.7.1",
     "tailwindcss": "4.3.5",
     "typescript": "7.0.2",

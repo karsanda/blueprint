@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { launch, probeText, typeInto } from '../e2e/launch'
+import { gitFolder, launch, probeText, typeInto } from '../e2e/launch'
 
 test('build step 1 screens', async () => {
   const { app, page } = await launch()
@@ -30,5 +30,20 @@ test('build step 2 screens', async () => {
   await typeInto(page, 'claude-1', '?')
   await expect(page.locator('[data-tab="claude-1"]')).toHaveAttribute('data-status', 'needs-you')
   await page.screenshot({ path: '.shots/step-2-needs-you.png' })
+  await app.close()
+})
+
+test('build step 3 screens', async () => {
+  const { app, page } = await launch({ folder: gitFolder() })
+  await expect.poll(() => probeText(page, 'claude-1')).toContain('claude ready')
+  await typeInto(page, 'claude-1', 'pwe')
+  const notes = page.locator('[data-tab="changes"] [data-path="notes.txt"]')
+  await notes.click()
+  await expect(page.locator('[data-tab="difference"] svg.bp-cloud')).toHaveCount(1)
+  await page.waitForTimeout(300)
+  await page.screenshot({ path: '.shots/step-3-review.png' })
+  await page.getByRole('button', { name: 'This session' }).click()
+  await page.waitForTimeout(300)
+  await page.screenshot({ path: '.shots/step-3-session.png' })
   await app.close()
 })
