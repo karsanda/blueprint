@@ -105,3 +105,26 @@
   color: var(--bp-on-agent);
   background: var(--bp-wait);
 }
+
+/* The status light on a Claude tab: a 7px square before the title. */
+.bp-tab {
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+.bp-light {
+  flex: none;
+  box-sizing: border-box;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+}
+.bp-light[data-status='needs-you'] {
+  background: var(--bp-wait);
+}
+.bp-light[data-status='working'] {
+  background: var(--bp-agent);
+}
+.bp-light[data-status='idle'] {
+  border: 1px solid var(--bp-muted);
+}

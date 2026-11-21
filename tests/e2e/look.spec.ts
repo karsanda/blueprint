@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { launch, probeSize, probeText } from './launch'
+import { launch, probeSize, probeText, typeInto } from './launch'
 
 test('tabs and panes use the Blueprint look', async () => {
   const { app, page } = await launch()
@@ -51,5 +51,21 @@ test('a Claude pane shows its column width', async () => {
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(900, 600))
   await expect.poll(cols).toBeLessThan(before)
   await expect(pane.locator('.bp-dim')).toHaveText(`${await cols()} COL`)
+  await app.close()
+})
+
+test('a session that needs the Developer stands out', async () => {
+  const { app, page } = await launch()
+  await expect.poll(() => probeText(page, 'claude-1')).toContain('claude ready')
+  await typeInto(page, 'claude-1', 'p?')
+  const pane = page.locator('[data-tab="claude-1"]')
+  await expect(pane).toHaveAttribute('data-status', 'needs-you')
+  const wait = 'rgb(255, 162, 76)'
+  const light = page.locator('.dv-tab', { hasText: 'Claude' }).getByRole('img', { name: 'Needs you' })
+  expect(await light.evaluate((el) => getComputedStyle(el).backgroundColor)).toContain(wait)
+  expect(await pane.locator('.bp-status').evaluate((el) => getComputedStyle(el).backgroundColor)).toContain(
+    wait,
+  )
+  expect(await pane.evaluate((el) => getComputedStyle(el).boxShadow)).toContain(wait)
   await app.close()
 })
