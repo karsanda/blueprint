@@ -95,7 +95,7 @@ Known gaps, also listed in the use case:
 
 Checked on 2026-11-21 with the built app and Claude Code 2.1.330, in manual mode, on a scratch Git repository:
 
-- `Write`, `Edit` and `Bash` Changes showed as Claude's in This turn. A failed `Bash` command did too.
+- `Write` and `Bash` Changes showed as Claude's in This turn. A failing `Bash` command did too.
 - Each permission prompt stayed open until answered, so Blueprint's `PreToolUse` hook did not answer it. Folder hooks ran beside Blueprint's.
 - An edit from the Shell pane showed as outside Claude within 1 second.
 - A background command left This turn unchanged. Its late file showed as outside Claude, the known gap.
