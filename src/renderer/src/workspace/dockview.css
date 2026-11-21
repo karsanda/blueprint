@@ -85,3 +85,23 @@
   border-left: 0;
   border-right: 1px solid var(--bp-muted);
 }
+
+/* The status label beside the dimension line, and the frame that says Needs you. */
+.bp-status {
+  margin-left: 6px;
+  padding: 0 4px;
+  font: 600 9.5px var(--bp-font-ui);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--bp-muted);
+}
+[data-status='working'] .bp-status {
+  color: var(--bp-agent);
+}
+[data-status='needs-you'] {
+  box-shadow: inset 0 0 0 1px var(--bp-wait);
+}
+[data-status='needs-you'] .bp-status {
+  color: var(--bp-on-agent);
+  background: var(--bp-wait);
+}

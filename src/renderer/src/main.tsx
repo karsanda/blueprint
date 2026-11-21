@@ -4,6 +4,7 @@ import './theme/tokens.css'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
+import { installStatus } from './status/install'
 import { installProbe } from './terminal/probe'
 
 // Load both faces before the first render, so terminals measure their cells with the right font.
@@ -13,6 +14,7 @@ await Promise.all([
 ])
 
 installProbe()
+installStatus()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
