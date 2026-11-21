@@ -55,6 +55,8 @@ const api: BlueprintApi = {
   },
   setReviewView: (view) => ipcRenderer.send('review:view', view),
   reviewDiff: (path) => ipcRenderer.invoke('review:diff', path),
+  getLayout: (): Promise<unknown> => ipcRenderer.invoke('layout:get'),
+  saveLayout: (layout) => ipcRenderer.send('layout:save', layout),
 }
 
 contextBridge.exposeInMainWorld('blueprint', api)

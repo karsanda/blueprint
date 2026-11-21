@@ -8,6 +8,7 @@ import type {
   StartRequest,
   StartResult,
 } from '../shared/api'
+import { layoutFile, readLayout, writeLayout } from './layout/store'
 import type { NeedsYouNotifier } from './notify'
 import type { ReviewService } from './review/service'
 import type { StatusRelay } from './status/relay'
@@ -25,7 +26,7 @@ export interface IpcDeps {
 }
 
 /** Registers the channels behind `window.blueprint`. Blueprint has one window, so this runs once. */
-export function registerIpc(win: BrowserWindow, deps: IpcDeps): void {
+export function registerIpc(win: BrowserWindow, deps: IpcDeps, userData: string): void {
   ipcMain.handle('folder:get', (): FolderState => deps.folder)
   ipcMain.handle('folder:pick', async (): Promise<FolderState> => {
     const result = await dialog.showOpenDialog(win, { properties: ['openDirectory'] })
@@ -47,6 +48,20 @@ export function registerIpc(win: BrowserWindow, deps: IpcDeps): void {
 
   ipcMain.on('review:view', (_e, view: ReviewView) => deps.review.setView(view))
   ipcMain.handle('review:diff', (_e, path: string): Promise<FileDiff> => deps.review.diff(path))
+
+  ipcMain.handle('layout:get', (): unknown => {
+    const folder = deps.folder.folder
+    return folder ? (readLayout(layoutFile(userData, folder))?.dockview ?? null) : null
+  })
+  ipcMain.on('layout:save', (_e, dockview: unknown) => {
+    const folder = deps.folder.folder
+    if (!folder) return
+    try {
+      writeLayout(layoutFile(userData, folder), folder, { dockview })
+    } catch (err) {
+      console.warn('Blueprint could not save the layout:', err)
+    }
+  })
 
   ipcMain.on('clipboard:write', (_e, text: string) => clipboard.writeText(text))
 }

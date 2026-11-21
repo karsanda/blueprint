@@ -96,4 +96,8 @@ export interface BlueprintApi {
   setReviewView(view: ReviewView): void
   /** The difference of one Change, by its path relative to the Folder. */
   reviewDiff(path: string): Promise<FileDiff>
+  /** The saved dockview layout of the open Folder, or null when there is none. */
+  getLayout(): Promise<unknown>
+  /** Saves the dockview layout (`toJSON()`) for the open Folder. */
+  saveLayout(layout: unknown): void
 }

@@ -11,6 +11,8 @@ export interface Launched {
   page: Page
   log: string
   folder: string
+  /** The home (and with it the user data) this launch used. */
+  home: string
 }
 
 export interface LaunchOptions {
@@ -19,6 +21,8 @@ export interface LaunchOptions {
   /** `fake` puts the fake `claude` first on PATH; `no-claude` leaves any `claude` off PATH. */
   path?: 'fake' | 'no-claude'
   args?: string[]
+  /** Reuse the home of an earlier launch, and with it the user data. Defaults to a fresh one. */
+  home?: string
 }
 
 const root = resolve(__dirname, '../..')
@@ -49,7 +53,7 @@ function definedEnv(env: NodeJS.ProcessEnv): Record<string, string> {
 export async function launch(opts: LaunchOptions = {}): Promise<Launched> {
   const tmp = mkdtempSync(join(tmpdir(), 'blueprint-e2e-'))
   const log = mkdtempSync(join(tmp, 'log-'))
-  const home = mkdtempSync(join(tmp, 'home-'))
+  const home = opts.home ?? mkdtempSync(join(tmp, 'home-'))
   const folder = opts.folder === undefined ? mkdtempSync(join(tmp, 'folder-')) : opts.folder
   const env: Record<string, string> = {
     ...definedEnv(process.env),
@@ -78,7 +82,7 @@ export async function launch(opts: LaunchOptions = {}): Promise<Launched> {
   await page.waitForLoadState('domcontentloaded')
   // The renderer installs the probe when its script runs, which can be after the DOM is loaded.
   await page.waitForFunction(() => window.blueprintProbe !== undefined, undefined, { timeout: 15000 })
-  return { app, page, log, folder: folder ?? '' }
+  return { app, page, log, folder: folder ?? '', home }
 }
 
 /** A file the fake programs wrote, or '' when it doesn't exist yet. */

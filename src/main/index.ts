@@ -1,7 +1,9 @@
 import { basename, join } from 'node:path'
-import { app, BrowserWindow, dialog, Menu, shell } from 'electron'
+import { app, BrowserWindow, dialog, Menu, screen, shell } from 'electron'
+import type { WindowBounds } from '../shared/api'
 import { resolveFolder } from './folder'
 import { type IpcDeps, registerIpc } from './ipc'
+import { initialWindow, layoutFile, readLayout, writeLayout } from './layout/store'
 import { NeedsYouNotifier } from './notify'
 import { createReviewDir } from './review/git'
 import { ReviewService } from './review/service'
@@ -10,10 +12,12 @@ import { type HookListener, startHookListener } from './status/listener'
 import { StatusRelay } from './status/relay'
 import { TerminalManager } from './terminal/manager'
 
-function createWindow(): BrowserWindow {
+/** Where the window opens: the Folder's saved bounds when they are still on a display, the default otherwise. */
+function createWindow(start: ReturnType<typeof initialWindow>): BrowserWindow {
   const win = new BrowserWindow({
     width: 1280,
     height: 800,
+    ...start.bounds,
     title: 'Blueprint',
     backgroundColor: '#163b6a',
     show: false,
@@ -26,7 +30,10 @@ function createWindow(): BrowserWindow {
   })
   // Blueprint asks for no browser permissions. Denying them also keeps the ligatures add-on on its built-in list.
   win.webContents.session.setPermissionRequestHandler((_wc, _permission, done) => done(false))
-  win.once('ready-to-show', () => win.show())
+  win.once('ready-to-show', () => {
+    if (start.maximized) win.maximize()
+    win.show()
+  })
   // The window only ever shows Blueprint: a page it navigated to would get the terminal API.
   // Links (such as OSC 8 links in terminal output) open in the Developer's browser instead.
   win.webContents.on('will-navigate', (event) => event.preventDefault())
@@ -86,7 +93,15 @@ void app.whenReady().then(async () => {
     app.quit()
     return
   }
-  win = createWindow()
+  const saved = folder.folder
+    ? readLayout(layoutFile(app.getPath('userData'), folder.folder))?.window
+    : undefined
+  win = createWindow(
+    initialWindow(
+      saved,
+      screen.getAllDisplays().map((d) => d.workArea),
+    ),
+  )
   const manager = new TerminalManager({
     data: (tabId, data) => send('terminal:data', tabId, data),
     exit: (tabId, exit) => send('terminal:exit', tabId, exit),
@@ -105,7 +120,8 @@ void app.whenReady().then(async () => {
     hookSettingsFor: (startKey) =>
       writeHookSettings(hookDir.dir, startKey, hookSettings(`${listener.url}/${startKey}`, listener.token)),
   }
-  registerIpc(win, deps)
+  registerIpc(win, deps, app.getPath('userData'))
+  keepWindowBounds(win, () => deps.folder.folder, app.getPath('userData'))
   win.on('focus', () => void review.refresh())
   // Both events fire on quit, so the cleanup runs once.
   let cleaned = false
@@ -126,6 +142,34 @@ void app.whenReady().then(async () => {
   })
   app.on('before-quit', cleanUp)
 })
+
+/** Saves the window's normal bounds 500 ms after the last move or resize, and at once on close. */
+function keepWindowBounds(
+  win: BrowserWindow,
+  folder: () => string | null | undefined,
+  userData: string,
+): void {
+  let timer: NodeJS.Timeout | undefined
+  const save = (): void => {
+    clearTimeout(timer)
+    timer = undefined
+    const open = folder()
+    if (!open || win.isDestroyed()) return
+    const bounds: WindowBounds = { ...win.getNormalBounds(), maximized: win.isMaximized() }
+    try {
+      writeLayout(layoutFile(userData, open), open, { window: bounds })
+    } catch (err) {
+      console.warn('Blueprint could not save the window bounds:', err)
+    }
+  }
+  const later = (): void => {
+    clearTimeout(timer)
+    timer = setTimeout(save, 500)
+  }
+  win.on('move', later)
+  win.on('resize', later)
+  win.on('close', save)
+}
 
 function isWebUrl(url: string): boolean {
   try {
