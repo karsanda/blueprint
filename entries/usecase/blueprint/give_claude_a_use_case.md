@@ -5,12 +5,16 @@ labels: [usecase]
 System: Blueprint
 Primary Actor: Developer
 Supporting Actors: Claude Code
-status: draft
+status: retired
 ---
 
 The Developer grounds a Claude session in a use case from the Folder, so Claude works from the agreed spec.
 
 A Folder can hold use cases in the Use-Case 3.0 format used by this repository and the team's `vidio-usecase` repository.
+
+### Retired
+
+Claude Code already does this. The Developer names the use case file in the prompt, and Claude Code reads it. Blueprint adds nothing of its own.
 
 ## Basic Flow
 

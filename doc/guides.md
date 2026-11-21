@@ -35,7 +35,7 @@ A use case written in enough detail is a ready context bundle for a coding sessi
 - [Context Anchoring](https://martinfowler.com/articles/reduce-friction-ai/context-anchoring.html#ExternalMemory)
 - [Feedback Flywheel](https://martinfowler.com/articles/reduce-friction-ai/feedback-flywheel.html)
 
-Blueprint itself supports this loop: [Give Claude a use case as context](../entries/usecase/blueprint/give_claude_a_use_case.md).
+Claude Code runs this loop by itself: mention the use case file with `@` in the prompt, and Claude Code reads it. Blueprint has no feature for it; [Give Claude a use case as context](../entries/usecase/blueprint/give_claude_a_use_case.md) is retired.
 
 ## Miscellaneous
 

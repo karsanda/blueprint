@@ -13,15 +13,14 @@ Every use case lives in [blueprint/](blueprint) for the [Blueprint](../system/bl
 
 ## MVP build order
 
-The MVP is the seven use cases below. We build them slice by slice, in this order:
+The MVP is the six use cases below. We build them slice by slice, in this order:
 
 1. [Talk to Claude in a pane](blueprint/talk_to_claude_in_a_pane.md), Slice 1, and [Run commands in a shell pane](blueprint/run_commands_in_a_shell_pane.md), Slice 1, inside the tiled layout from [Arrange my panes](blueprint/arrange_my_panes.md), Slice 1
 2. [Know when Claude needs me](blueprint/know_when_claude_needs_me.md), Slice 1
 3. [Review what Claude changed](blueprint/review_what_claude_changed.md), Slices 1 and 2
 4. [Arrange my panes](blueprint/arrange_my_panes.md), Slice 2
 5. [Run several Claude sessions](blueprint/run_several_claude_sessions.md), Slices 1 and 2
-6. [Give Claude a use case as context](blueprint/give_claude_a_use_case.md), Slices 1 and 2
-7. [Talk to Claude in a pane](blueprint/talk_to_claude_in_a_pane.md), Slice 2, [Run commands in a shell pane](blueprint/run_commands_in_a_shell_pane.md), Slice 2, and [Arrange my panes](blueprint/arrange_my_panes.md), Slice 3
+6. [Talk to Claude in a pane](blueprint/talk_to_claude_in_a_pane.md), Slice 2, [Run commands in a shell pane](blueprint/run_commands_in_a_shell_pane.md), Slice 2, and [Arrange my panes](blueprint/arrange_my_panes.md), Slice 3
 
 ## claude
 
@@ -43,4 +42,4 @@ The MVP is the seven use cases below. We build them slice by slice, in this orde
 
 ## usecase
 
-- [Give Claude a use case as context](blueprint/give_claude_a_use_case.md)
+- [Give Claude a use case as context](blueprint/give_claude_a_use_case.md) (retired)
