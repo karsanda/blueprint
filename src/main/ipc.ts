@@ -92,7 +92,7 @@ async function startTerminal(deps: IpcDeps, req: StartRequest): Promise<StartRes
   let spec: SpawnSpec | StartFailure
   if (req.kind === 'claude') {
     try {
-      spec = claudeSpec(folder, process.env, sessionId, deps.hookSettingsFor(startKey))
+      spec = claudeSpec(folder, process.env, { sessionId }, deps.hookSettingsFor(startKey))
     } catch (err) {
       return { ok: false, failure: { reason: 'spawn-failed', message: errorMessage(err) } }
     }
