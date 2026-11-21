@@ -46,6 +46,7 @@ export function claudeSpec(
   folder: string,
   base: NodeJS.ProcessEnv,
   sessionId: string,
+  settingsFile: string,
 ): SpawnSpec | StartFailure {
   const file = findExecutable('claude', base)
   if (!file) {
@@ -55,7 +56,12 @@ export function claudeSpec(
       fix: 'Install it with: curl -fsSL https://claude.ai/install.sh | bash — then press Restart.',
     }
   }
-  return { file, args: ['--session-id', sessionId], cwd: folder, env: terminalEnv(base) }
+  return {
+    file,
+    args: ['--session-id', sessionId, '--settings', settingsFile],
+    cwd: folder,
+    env: terminalEnv(base),
+  }
 }
 
 export function shellSpec(folder: string, base: NodeJS.ProcessEnv): SpawnSpec {

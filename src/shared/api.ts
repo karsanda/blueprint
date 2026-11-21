@@ -48,5 +48,7 @@ export interface BlueprintApi {
   resize(tabId: string, cols: number, rows: number): void
   onData(tabId: string, cb: (data: string) => void): () => void
   onExit(tabId: string, cb: (exit: ExitInfo) => void): () => void
+  /** Every status signal main learned about any Claude session, with the tab it belongs to. */
+  onStatusSignal(cb: (tabId: string, signal: StatusSignal) => void): () => void
   writeClipboard(text: string): void
 }

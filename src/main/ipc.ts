@@ -1,12 +1,16 @@
 import { randomUUID } from 'node:crypto'
 import { type BrowserWindow, clipboard, dialog, ipcMain } from 'electron'
 import type { FolderState, StartRequest, StartResult } from '../shared/api'
+import type { StatusRelay } from './status/relay'
 import type { TerminalManager } from './terminal/manager'
 import { claudeSpec, shellSpec } from './terminal/spec'
 
 export interface IpcDeps {
   folder: FolderState
   manager: TerminalManager
+  relay: StatusRelay
+  /** Claude Code settings that carry Blueprint's hooks. */
+  settingsFile: string
 }
 
 /** Registers the channels behind `window.blueprint`. Blueprint has one window, so this runs once. */
@@ -32,9 +36,13 @@ function startTerminal(deps: IpcDeps, req: StartRequest): StartResult {
   const folder = deps.folder.folder
   if (!folder) return { ok: false, failure: { reason: 'spawn-failed', message: 'No Folder is open.' } }
   // Each Claude start is a new conversation; resuming one comes with a later slice.
+  const sessionId = randomUUID()
   const spec =
-    req.kind === 'claude' ? claudeSpec(folder, process.env, randomUUID()) : shellSpec(folder, process.env)
+    req.kind === 'claude'
+      ? claudeSpec(folder, process.env, sessionId, deps.settingsFile)
+      : shellSpec(folder, process.env)
   if ('reason' in spec) return { ok: false, failure: spec }
+  if (req.kind === 'claude') deps.relay.register(req.tabId, sessionId)
   try {
     return { ok: true, pid: deps.manager.start(req.tabId, spec, req.cols, req.rows) }
   } catch (err) {

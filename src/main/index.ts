@@ -2,6 +2,9 @@ import { join } from 'node:path'
 import { app, BrowserWindow, Menu, shell } from 'electron'
 import { resolveFolder } from './folder'
 import { registerIpc } from './ipc'
+import { hookSettings, writeHookSettings } from './status/hooks'
+import { startHookListener } from './status/listener'
+import { StatusRelay } from './status/relay'
 import { TerminalManager } from './terminal/manager'
 
 function createWindow(): BrowserWindow {
@@ -45,23 +48,39 @@ function createWindow(): BrowserWindow {
 // No app menu: its shortcuts (Ctrl+W closes, Ctrl+R reloads) would take keys from the terminals.
 Menu.setApplicationMenu(null)
 
-void app.whenReady().then(() => {
+void app.whenReady().then(async () => {
   const folder = resolveFolder(process.argv, { packaged: app.isPackaged, cwd: process.cwd() })
-  const win = createWindow()
+  // The window is created after the listener and settings file exist, so every handler is
+  // there before the renderer loads.
+  let win: BrowserWindow | undefined
   const send = (channel: string, ...args: unknown[]): void => {
-    if (!win.webContents.isDestroyed()) win.webContents.send(channel, ...args)
+    if (win && !win.webContents.isDestroyed()) win.webContents.send(channel, ...args)
   }
+  const relay = new StatusRelay((tabId, signal) => send('status:signal', tabId, signal))
+  const listener = await startHookListener((e) => relay.hook(e))
+  const settings = writeHookSettings(hookSettings(listener.url, listener.token))
+  win = createWindow()
   const manager = new TerminalManager({
     data: (tabId, data) => send('terminal:data', tabId, data),
     exit: (tabId, exit) => send('terminal:exit', tabId, exit),
   })
-  registerIpc(win, { folder, manager })
+  registerIpc(win, { folder, manager, relay, settingsFile: settings.file })
+  // Both events fire on quit, so the cleanup runs once.
+  let cleaned = false
+  const cleanUp = (): void => {
+    manager.killAll()
+    if (cleaned) return
+    cleaned = true
+    void listener.close()
+    relay.close()
+    settings.remove()
+  }
   // No terminal outlives the window: quitting ends every Claude session and shell.
   app.on('window-all-closed', () => {
-    manager.killAll()
+    cleanUp()
     app.quit()
   })
-  app.on('before-quit', () => manager.killAll())
+  app.on('before-quit', cleanUp)
 })
 
 function isWebUrl(url: string): boolean {
