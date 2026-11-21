@@ -58,6 +58,11 @@ Test cases:
 
 Covers: Basic Flow steps 6 and 7.
 
+Work items:
+
+- [ ] Save the layout of each Folder as it changes
+- [ ] Restore the layout and the window's size and place when the Folder opens again
+
 Test cases:
 
 - Given a changed layout, when the Developer reopens the Folder, then the layout is the same.

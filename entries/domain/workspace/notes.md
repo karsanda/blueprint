@@ -16,7 +16,13 @@ Code-level detail for [Arrange my panes](../../usecase/blueprint/arrange_my_pane
 - Tabs have no close action yet (dockview `hideClose`, which also stops middle-click). Closing comes with the slices that can open new tabs, and must end the tab's program.
 - The window only shows Blueprint: navigation is refused and `window.open` is denied. Web links, such as OSC 8 links in terminal output, open in the Developer's browser.
 - Tests: Playwright's `dragTo` starts a native drag session, which hangs a visible Electron window on Wayland. The drag tests dispatch dockview's HTML5 drag events instead.
-- The layout is saved as dockview JSON per Folder in Electron's user data folder, along with the Claude session ids for resume.
+- Remembering the layout:
+  - One file per Folder: `<user data>/layouts/<first 16 hex digits of sha256(Folder path)>.json`, holding the dockview JSON and the window's bounds. It is written whole to a temporary file, then renamed over the old one.
+  - The renderer sends `api.toJSON()` 500 ms after the last layout change. It sends nothing while a pane is zoomed: dockview hides the other panes by giving them zero width, and that would be saved. So a Folder closed while zoomed reopens with its last unzoomed layout, and nothing zoomed.
+  - The main process saves the window's normal bounds and whether it is maximized, 500 ms after a move or resize and again on close.
+  - On open, the renderer loads the saved JSON with `api.fromJSON`. A file that is missing, broken, or names a panel Blueprint doesn't know gives the default layout. A saved layout missing one of the default panes, such as one saved before the review panes existed, gets that pane added where the default layout puts it. Panels keep `renderer: 'always'` through the JSON, so terminals stay mounted.
+  - The window opens at its saved bounds when at least 100 by 100 pixels of them fall on a display's work area; otherwise at the default size. A Folder picked after the window opened keeps the open window's bounds.
+  - Programs start fresh in the restored panes. Saving the Claude session ids for resume comes with [Talk to Claude in a pane](../../usecase/blueprint/talk_to_claude_in_a_pane.md), Slice 2.
 - Shells: the Developer's `$SHELL` in a pseudo-terminal, started in the Folder.
 - Keys: Alt h/j/k/l focus, Alt Shift h/j/k/l move the tab, Alt Enter new shell, Alt c new Claude session, Alt z zoom, Ctrl Tab next tab. Alt avoids the desktop's own Super shortcuts.
 - Presets: Agent and review, Two agents, Terminal heavy, Focus.
