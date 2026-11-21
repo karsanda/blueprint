@@ -13,7 +13,7 @@ import {
 } from './hooks'
 
 describe('hookSettings', () => {
-  it('points the six events at the listener with the token', () => {
+  it('points the seven events at the listener with the token', () => {
     const { hooks } = hookSettings('http://127.0.0.1:9/hook', 'tok')
     expect(Object.keys(hooks)).toEqual([...HOOK_EVENTS])
     expect(hooks.Stop[0]).toEqual({
@@ -39,7 +39,18 @@ describe('hookSettings', () => {
     })
     expect(hooks.UserPromptSubmit[0]?.hooks[0]?.timeout).toBe(10)
     const withMatcher = HOOK_EVENTS.filter((e) => 'matcher' in hooks[e][0])
-    expect(withMatcher).toEqual(['PreToolUse', 'PermissionRequest', 'PostToolUse'])
+    expect(withMatcher).toEqual(['PreToolUse', 'PermissionRequest', 'PostToolUse', 'PostToolUseFailure'])
+    expect(hooks.PostToolUseFailure[0]).toEqual({
+      matcher: 'Bash',
+      hooks: [
+        {
+          type: 'http',
+          url: 'http://127.0.0.1:9/hook',
+          headers: { Authorization: 'Bearer tok' },
+          timeout: 2,
+        },
+      ],
+    })
     expect(hooks.PostToolUse[0].matcher).toBe('*')
     expect(hooks.PermissionRequest[0].matcher).toBe('*')
   })
@@ -55,6 +66,7 @@ describe('signalFromHook', () => {
     [{ hook_event_name: 'Notification', notification_type: 'idle_prompt' }, null],
     [{ hook_event_name: 'Notification', notification_type: 'auth_success' }, null],
     [{ hook_event_name: 'PostToolUse' }, { kind: 'tool-done' }],
+    [{ hook_event_name: 'PostToolUseFailure' }, null],
     [{ hook_event_name: 'Stop' }, { kind: 'stop' }],
     [{ hook_event_name: 'SubagentStop' }, null],
   ]

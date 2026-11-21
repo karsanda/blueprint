@@ -20,6 +20,7 @@ export const HOOK_EVENTS = [
   'PreToolUse',
   'PermissionRequest',
   'PostToolUse',
+  'PostToolUseFailure',
   'Notification',
   'Stop',
 ] as const
@@ -30,7 +31,7 @@ export interface HookMatcher {
   hooks: { type: 'http'; url: string; headers: { Authorization: string }; timeout: number }[]
 }
 
-/** Claude Code settings that send the six hook events to the listener. */
+/** Claude Code settings that send the seven hook events to the listener. */
 export function hookSettings(url: string, token: string): { hooks: Record<HookEvent, HookMatcher[]> } {
   const hook = (timeout: number) => ({
     type: 'http' as const,
@@ -44,6 +45,8 @@ export function hookSettings(url: string, token: string): { hooks: Record<HookEv
         return { hooks: [hook(10)] }
       case 'PreToolUse':
         return { matcher: 'Bash', hooks: [hook(10)] }
+      case 'PostToolUseFailure':
+        return { matcher: 'Bash', hooks: [hook(2)] }
       case 'PermissionRequest':
       case 'PostToolUse':
         return { matcher: '*', hooks: [hook(2)] }
@@ -57,6 +60,7 @@ export function hookSettings(url: string, token: string): { hooks: Record<HookEv
       PreToolUse: [matcher('PreToolUse')],
       PermissionRequest: [matcher('PermissionRequest')],
       PostToolUse: [matcher('PostToolUse')],
+      PostToolUseFailure: [matcher('PostToolUseFailure')],
       Notification: [matcher('Notification')],
       Stop: [matcher('Stop')],
     },

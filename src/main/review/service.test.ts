@@ -123,6 +123,16 @@ describe('ReviewService', () => {
     expect(await r.listed('turn', [['e.txt', true]])).toEqual([['e.txt', true]])
   })
 
+  it("a file a failing shell command changes is Claude's", async () => {
+    const r = await rig()
+    await r.svc.hook(KEY, prompt())
+    const bash = { tool_name: 'Bash', tool_use_id: 't2', session_id: 's1' }
+    await r.svc.hook(KEY, { hook_event_name: 'PreToolUse', ...bash })
+    r.write('h.txt')
+    await r.svc.hook(KEY, { hook_event_name: 'PostToolUseFailure', ...bash })
+    expect(await r.listed('turn', [['h.txt', true]])).toEqual([['h.txt', true]])
+  })
+
   it("a subagent's edit is Claude's", async () => {
     const r = await rig()
     await r.svc.hook(KEY, prompt())
@@ -265,5 +275,38 @@ describe('ReviewService', () => {
     expect(text.kind === 'text' && text.patch).toContain('+needle line')
     expect(await r.svc.diff('bin.dat')).toEqual({ kind: 'binary' })
     expect(await r.svc.diff('a.txt')).toEqual({ kind: 'none' })
+  })
+
+  it('a session started while the Folder changes stays off the new Folder', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const r = await rig({ start: false })
+      const other = makeRepo()
+      const started = r.svc.startSession('claude-1', KEY)
+      await new Promise((resolve) => setTimeout(resolve, 1))
+      const moved = r.svc.setFolder(other)
+      await Promise.all([started, moved])
+      r.svc.setView({ range: 'session', visible: true })
+      await vi.waitFor(() =>
+        expect(r.last()).toEqual({ kind: 'waiting', message: 'Changes show here once Claude starts.' }),
+      )
+      await new Promise((resolve) => setTimeout(resolve, 200))
+      expect(warn).not.toHaveBeenCalled()
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('every view change sends the state, even an unchanged one', async () => {
+    const r = await rig()
+    const view = { range: 'turn' as const, visible: false }
+    r.svc.setView(view)
+    await vi.waitFor(() => expect(r.states.length).toBeGreaterThan(0))
+    const before = r.states.length
+    r.svc.setView(view)
+    await vi.waitFor(() => expect(r.states.length).toBeGreaterThan(before))
+    const second = r.states.length
+    r.svc.setView(view)
+    await vi.waitFor(() => expect(r.states.length).toBeGreaterThan(second))
   })
 })

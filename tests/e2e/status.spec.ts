@@ -20,6 +20,7 @@ test("Claude Code gets Blueprint's hooks in a private settings file, removed on 
     'Notification',
     'PermissionRequest',
     'PostToolUse',
+    'PostToolUseFailure',
     'PreToolUse',
     'Stop',
     'UserPromptSubmit',

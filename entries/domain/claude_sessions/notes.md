@@ -22,7 +22,7 @@ Code-level detail for [Talk to Claude in a pane](../../usecase/blueprint/talk_to
 
 Status comes from three sources: Claude Code's hooks, the keys the Developer types, and the session's transcript. Hooks alone are not enough, because some answers and every refusal fire no hook (see below).
 
-The generated settings file adds HTTP hooks (`"type": "http"`) for `UserPromptSubmit`, `PreToolUse` (matcher `Bash`), `PermissionRequest`, `PostToolUse` (matcher `*`), `Notification` and `Stop`. Claude Code POSTs each event's JSON to a local listener on `127.0.0.1` with a random port, and a random token in the `Authorization` header. The timeout is 2 seconds, or 10 for `UserPromptSubmit` and `PreToolUse`: their replies wait for a snapshot (see [Review](../review/notes.md)). The listener answers `204` with no body, so the `PermissionRequest` hook never answers a prompt for the Developer. HTTP hooks need no `curl` and no shell. Blueprint writes one settings file per Claude start. Its hook URL ends in a per-start key (`/hook/<key>`), and that key, not `session_id`, routes hooks to the tab. `session_id` and `transcript_path` only choose the transcript to follow, which changes after `/clear`. The files sit in a private directory, in `$XDG_RUNTIME_DIR` when it is set. They hold the token, so only the Developer can read them, and Blueprint deletes the directory on quit.
+The generated settings file adds HTTP hooks (`"type": "http"`) for `UserPromptSubmit`, `PreToolUse` (matcher `Bash`), `PermissionRequest`, `PostToolUse` (matcher `*`), `PostToolUseFailure` (matcher `Bash`), `Notification` and `Stop`. Claude Code POSTs each event's JSON to a local listener on `127.0.0.1` with a random port, and a random token in the `Authorization` header. The timeout is 2 seconds, or 10 for `UserPromptSubmit` and `PreToolUse`: their replies wait for a snapshot (see [Review](../review/notes.md)). The listener answers `204` with no body, so the `PermissionRequest` hook never answers a prompt for the Developer. HTTP hooks need no `curl` and no shell. Blueprint writes one settings file per Claude start. Its hook URL ends in a per-start key (`/hook/<key>`), and that key, not `session_id`, routes hooks to the tab. `session_id` and `transcript_path` only choose the transcript to follow, which changes after `/clear`. The files sit in a private directory, in `$XDG_RUNTIME_DIR` when it is set. They hold the token, so only the Developer can read them, and Blueprint deletes the directory on quit.
 
 A Claude session shows idle once its terminal runs. There is no `SessionStart` hook: Claude Code skips HTTP hooks for that event.
 
@@ -34,6 +34,7 @@ A Claude session shows idle once its terminal runs. There is no `SessionStart` h
 | `Notification`, type `permission_prompt` or `elicitation_dialog` | Needs you | backup for `PermissionRequest` |
 | `Notification`, any other type | none | |
 | `PostToolUse` | working, but never clears Needs you | record the paths Claude touched |
+| `PostToolUseFailure` for `Bash` | none | take the snapshot after the command, like `PostToolUse` |
 | `Stop` | idle | refresh the review |
 | The Developer types a key in a pane that shows Needs you | working | |
 | The transcript gains a line starting `[Request interrupted by user` | idle | |
@@ -57,6 +58,7 @@ Checked on 2026-11-21 with a real session whose hooks logged every event:
 - `UserPromptSubmit` also fires for Claude Code's own messages, with the message as `prompt`: `<task-notification>` when a background command ends, and `<agent-message from="…">` when a subagent hands back. No field tells them from a typed prompt.
 - A subagent's tool hooks carry the session's `session_id`, plus `agent_id` and `agent_type`.
 - `Bash` with `run_in_background` fires `PostToolUse` when the command starts, not when it ends.
+- A `Bash` command that fails fires `PostToolUseFailure` instead of `PostToolUse`, with the same `tool_use_id`.
 - These last four were checked with `claude -p`, on Haiku.
 
 ### Rules

@@ -39,6 +39,8 @@ export class ReviewService {
   private lastSent: string | undefined
   private generation = 0
   private closed = false
+  /** Counts Folder changes, so work that began under an earlier Folder can tell. */
+  private folderEpoch = 0
 
   constructor(
     private readonly runDir: string,
@@ -56,6 +58,7 @@ export class ReviewService {
   }
 
   private async open(folder: string | null): Promise<void> {
+    this.folderEpoch++
     this.folder = folder
     this.store = undefined
     this.problem = undefined
@@ -78,7 +81,12 @@ export class ReviewService {
 
   async startSession(tabId: string, startKey: string): Promise<void> {
     try {
-      await this.opening
+      let opening: Promise<void>
+      do {
+        opening = this.opening
+        await opening
+      } while (opening !== this.opening)
+      const epoch = this.folderEpoch
       for (const [key, session] of this.sessions) {
         if (session.tabId === tabId) this.sessions.delete(key)
       }
@@ -89,8 +97,11 @@ export class ReviewService {
         before: new Map(),
       }
       if (store) session.base = await store.snapshot()
-      this.sessions.set(startKey, session)
-      this.shownKey = startKey
+      // A Folder change during the snapshot makes this base a tree of the old store.
+      if (epoch === this.folderEpoch) {
+        this.sessions.set(startKey, session)
+        this.shownKey = startKey
+      }
     } catch (error) {
       this.warn('take the session base', error)
     }
@@ -110,7 +121,10 @@ export class ReviewService {
         this.background(() => this.refresh())
       } else if (e.hook_event_name === 'PreToolUse' && e.tool_name === 'Bash' && e.tool_use_id) {
         session.before.set(e.tool_use_id, await store.snapshot())
-      } else if (e.hook_event_name === 'PostToolUse') {
+      } else if (
+        e.hook_event_name === 'PostToolUse' ||
+        (e.hook_event_name === 'PostToolUseFailure' && e.tool_name === 'Bash')
+      ) {
         if (e.tool_name && EDIT_TOOLS.has(e.tool_name) && e.file_path) {
           const path = pathInFolder(folder, e.file_path)
           if (path) session.touches.touch(path)
@@ -134,6 +148,7 @@ export class ReviewService {
 
   setView(view: ReviewView): void {
     this.view = view
+    this.lastSent = undefined
     clearInterval(this.poll)
     this.poll = undefined
     if (view.visible && !this.closed) {
@@ -149,7 +164,7 @@ export class ReviewService {
     try {
       if (this.store?.busy) {
         // The latest tree is a little old, but the range may have changed.
-        if (force && this.latest) await this.publish(await this.build(this.latest), this.generation, true)
+        if (force) await this.publish(await this.build(this.latest), this.generation, true)
         return
       }
       const generation = ++this.generation

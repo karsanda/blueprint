@@ -35,7 +35,7 @@ git write-tree
 | Blueprint starts Claude, before the process runs | session base | This session |
 | `UserPromptSubmit` from the Developer, before replying | turn base | This turn |
 | `PreToolUse` for `Bash`, before replying | before the command | who made a Change |
-| `PostToolUse` for `Bash` | after the command | who made a Change, refresh |
+| `PostToolUse` or `PostToolUseFailure` for `Bash` | after the command | who made a Change, refresh |
 | Any other `PostToolUse`, `Stop`, the window coming to the front, and every 2 seconds while the Changes pane is visible | now | refresh |
 
 - The status signal goes out when the hook arrives. Only the reply waits for the snapshot.
@@ -62,7 +62,7 @@ A Change is Claude's when Claude touched its path in the chosen range: this turn
 Claude touched a path when:
 
 - a `PostToolUse` for `Write`, `Edit` or `NotebookEdit` named it (`tool_input.file_path`, or `tool_input.notebook_path`). The path is absolute; Blueprint makes it relative to the Folder.
-- it differs between the snapshots before and after one of Claude's `Bash` commands. The two hooks share a `tool_use_id`.
+- it differs between the snapshots before and after one of Claude's `Bash` commands. The two hooks share a `tool_use_id`, and the after snapshot comes from `PostToolUse` or, when the command fails, `PostToolUseFailure`.
 
 A subagent's tool hooks reach the same start key, so its edits count as the session's. Blueprint keeps the touched paths with the turn each was touched in. A path Claude touched in an earlier turn and the Developer changed since counts as outside Claude in the later turn.
 
