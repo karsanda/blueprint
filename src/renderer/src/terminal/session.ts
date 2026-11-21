@@ -31,6 +31,7 @@ export class TerminalSession {
   private readonly fit = new FitAddon()
   private opened = false
   private started = false
+  private disposed = false
   private observer: ResizeObserver | null = null
   private host: HTMLElement | null = null
   private frame = 0
@@ -101,6 +102,7 @@ export class TerminalSession {
 
   /** Ends the view for good: the tab is closed. Stopping its program is main's part. */
   dispose(): void {
+    this.disposed = true
     cancelAnimationFrame(this.frame)
     this.detach()
     for (const off of this.offs) off()
@@ -121,6 +123,8 @@ export class TerminalSession {
     this.fitToHost()
     const { cols, rows } = this.term
     const result = await window.blueprint.startTerminal({ tabId: this.tabId, kind: this.kind, cols, rows })
+    // The tab was closed while its program was starting.
+    if (this.disposed) return
     if (!result.ok) {
       status.set(this.tabId, { state: 'failed', failure: result.failure })
       return

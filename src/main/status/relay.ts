@@ -38,6 +38,11 @@ export class StatusRelay {
     this.startByKey.set(startKey, { tabId })
   }
 
+  /** The start key a tab's current start has, or undefined once the tab was unregistered. */
+  currentKey(tabId: string): string | undefined {
+    return this.keyByTab.get(tabId)
+  }
+
   /** Forgets a closed tab's start key and stops following its transcript. */
   unregister(tabId: string): void {
     const key = this.keyByTab.get(tabId)

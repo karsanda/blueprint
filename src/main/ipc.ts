@@ -108,6 +108,11 @@ async function startTerminal(deps: IpcDeps, req: StartRequest): Promise<StartRes
       // Claude is worth more than its review: start it without one.
       console.warn('Review could not start a session:', err)
     }
+    // The tab may have closed (or started again) while the review was starting: spawn nothing for it.
+    if (deps.relay.currentKey(req.tabId) !== startKey) {
+      if (deps.relay.currentKey(req.tabId) === undefined) deps.review.endSession(req.tabId)
+      return { ok: false, failure: { reason: 'spawn-failed', message: 'The tab was closed.' } }
+    }
   }
   try {
     return { ok: true, pid: deps.manager.start(req.tabId, spec, req.cols, req.rows) }

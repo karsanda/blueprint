@@ -139,6 +139,31 @@ test('new sessions count on from the highest open number', async () => {
   await app.close()
 })
 
+test('a closed session number is not given to the next session', async () => {
+  const { app, page } = await launch()
+  await expect.poll(() => probeText(page, 'claude-1')).toContain('claude ready')
+  await openSession(page, 'Claude', 'claude-2')
+  await closeAction(page, 'Claude 2').click()
+  await expect(tab(page, 'Claude 2')).toHaveCount(0)
+  await openSession(page, 'Claude', 'claude-3')
+  await expect(tab(page, 'Claude 3')).toBeVisible()
+  await expect(tab(page, 'Claude 2')).toHaveCount(0)
+  await app.close()
+})
+
+test('a session closed while it is starting leaves no program behind', async () => {
+  const { app, page, log } = await launch()
+  await expect.poll(() => probeText(page, 'claude-1')).toContain('claude ready')
+  await groupWith(page, 'Claude').getByRole('button', { name: 'New Claude session' }).click()
+  await closeAction(page, 'Claude 2').click()
+  await page.waitForTimeout(1000)
+  await expect(tab(page, 'Claude 2')).toHaveCount(0)
+  const started = readLog(log, 'claude2.start')
+  if (started !== '') expect(alive(pidOf(log, 'claude2.start'))).toBe(false)
+  await expect.poll(() => page.title()).toBe('Blueprint')
+  await app.close()
+})
+
 test('a saved layout with Claude 2 opens it again', async () => {
   const first = await launch()
   await expect.poll(() => probeText(first.page, 'claude-1')).toContain('claude ready')

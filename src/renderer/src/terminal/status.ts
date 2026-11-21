@@ -10,10 +10,17 @@ export interface TerminalStatus {
 interface StatusStore {
   tabs: Record<string, TerminalStatus>
   set(tabId: string, status: TerminalStatus): void
+  /** Forgets a closed tab. */
+  clear(tabId: string): void
 }
 
 /** Each tab's terminal state, for the notices and, later, the status lights. */
 export const useTerminalStatus = create<StatusStore>((set) => ({
   tabs: {},
   set: (tabId, status) => set((s) => ({ tabs: { ...s.tabs, [tabId]: status } })),
+  clear: (tabId) =>
+    set((s) => {
+      const { [tabId]: _gone, ...tabs } = s.tabs
+      return { tabs }
+    }),
 }))
