@@ -26,6 +26,7 @@ const api: BlueprintApi = {
   getFolder: (): Promise<FolderState> => ipcRenderer.invoke('folder:get'),
   pickFolder: (): Promise<FolderState> => ipcRenderer.invoke('folder:pick'),
   startTerminal: (req: StartRequest): Promise<StartResult> => ipcRenderer.invoke('terminal:start', req),
+  stopTerminal: (tabId) => ipcRenderer.send('terminal:stop', tabId),
   write: (tabId, data) => ipcRenderer.send('terminal:write', tabId, data),
   resize: (tabId, cols, rows) => ipcRenderer.send('terminal:resize', tabId, cols, rows),
   onData: (tabId, cb) => onTab<string>('terminal:data', tabId, cb),

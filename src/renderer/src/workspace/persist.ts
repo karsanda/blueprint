@@ -14,8 +14,10 @@ const EXPECTED: Record<string, { component: string; kind?: string }> = {
   difference: { component: 'difference' },
 }
 
+const CLAUDE_TAB = { component: 'terminal', kind: 'claude' }
+
 function isExpected(api: DockviewApi, id: string): boolean {
-  const want = EXPECTED[id]
+  const want = EXPECTED[id] ?? (/^claude-\d+$/.test(id) ? CLAUDE_TAB : undefined)
   const panel = api.getPanel(id)
   if (!want || !panel) return false
   const view = panel.api.component
@@ -25,7 +27,7 @@ function isExpected(api: DockviewApi, id: string): boolean {
 
 /**
  * Loads a saved layout. Gives `false`, with the dock cleared, when the JSON doesn't load, lacks
- * Claude, or holds a panel that isn't one of Blueprint's default panes; the caller then adds the
+ * Claude, or holds a panel that isn't a default pane or a Claude session; the caller then adds the
  * default panes.
  */
 export function restoreLayout(api: DockviewApi, saved: unknown): boolean {

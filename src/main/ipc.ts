@@ -49,6 +49,11 @@ export function registerIpc(win: BrowserWindow, deps: IpcDeps, userData: string)
   })
 
   ipcMain.handle('terminal:start', (_e, req: StartRequest): Promise<StartResult> => startTerminal(deps, req))
+  ipcMain.on('terminal:stop', (_e, tabId: string) => {
+    deps.manager.kill(tabId)
+    deps.relay.unregister(tabId)
+    deps.review.endSession(tabId)
+  })
   ipcMain.on('terminal:write', (_e, tabId: string, data: string) => deps.manager.write(tabId, data))
   ipcMain.on('terminal:resize', (_e, tabId: string, cols: number, rows: number) =>
     deps.manager.resize(tabId, cols, rows),

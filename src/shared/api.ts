@@ -89,6 +89,8 @@ export interface BlueprintApi {
   getFolder(): Promise<FolderState>
   pickFolder(): Promise<FolderState>
   startTerminal(req: StartRequest): Promise<StartResult>
+  /** Ends a closed tab's program and makes main forget its start key and session. */
+  stopTerminal(tabId: string): void
   write(tabId: string, data: string): void
   resize(tabId: string, cols: number, rows: number): void
   onData(tabId: string, cb: (data: string) => void): () => void
