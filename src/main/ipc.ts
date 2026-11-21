@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { type BrowserWindow, clipboard, dialog, ipcMain } from 'electron'
+import { type BrowserWindow, clipboard, dialog, ipcMain, screen } from 'electron'
 import type {
   FileDiff,
   FolderState,
@@ -8,7 +8,7 @@ import type {
   StartRequest,
   StartResult,
 } from '../shared/api'
-import { layoutFile, readLayout, writeLayout } from './layout/store'
+import { initialWindow, layoutFile, readLayout, writeLayout } from './layout/store'
 import type { NeedsYouNotifier } from './notify'
 import type { ReviewService } from './review/service'
 import type { StatusRelay } from './status/relay'
@@ -34,6 +34,16 @@ export function registerIpc(win: BrowserWindow, deps: IpcDeps, userData: string)
     if (picked) {
       deps.folder = { folder: picked }
       await deps.review.setFolder(picked)
+      // The window goes to this Folder's place; closing it then saves the bounds back to the same Folder.
+      const start = initialWindow(
+        readLayout(layoutFile(userData, picked))?.window,
+        screen.getAllDisplays().map((d) => d.workArea),
+      )
+      if (start.bounds) {
+        if (win.isMaximized()) win.unmaximize()
+        win.setBounds(start.bounds)
+      }
+      if (start.maximized) win.maximize()
     }
     return deps.folder
   })

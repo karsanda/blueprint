@@ -57,17 +57,29 @@ export function readLayout(file: string): SavedLayout | null {
   return layout
 }
 
-/** Merges the patch into the saved layout and writes it whole to `<file>.tmp`, then renames it over the old one. */
+function newerVersion(file: string): boolean {
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(file, 'utf8'))
+    return isRecord(parsed) && typeof parsed.version === 'number' && parsed.version > 1
+  } catch {
+    return false
+  }
+}
+
+/** Merges the patch into the saved layout and writes it whole to `<file>.<pid>.tmp`, then renames it over the old one. */
 export function writeLayout(
   file: string,
   folder: string,
   patch: { dockview?: unknown; window?: WindowBounds },
 ): void {
+  // A file from a newer Blueprint stays as it is: this version would drop what it doesn't know.
+  if (newerVersion(file)) return
   const layout: SavedLayout = { ...(readLayout(file) ?? { version: 1, folder }), folder }
   if (patch.dockview !== undefined) layout.dockview = patch.dockview
   if (patch.window !== undefined) layout.window = patch.window
   mkdirSync(dirname(file), { recursive: true })
-  const temp = `${file}.tmp`
+  // The process id keeps two Blueprints (one per Electron instance) from sharing a temp file.
+  const temp = `${file}.${process.pid}.tmp`
   writeFileSync(temp, JSON.stringify(layout))
   renameSync(temp, file)
 }
@@ -80,7 +92,18 @@ function overlaps(bounds: Rect, area: Rect): boolean {
   return width >= MIN_VISIBLE && height >= MIN_VISIBLE
 }
 
-/** The saved bounds when at least 100 × 100 px of them are on a work area, none otherwise. */
+function fitInto(bounds: Rect, area: Rect): Rect {
+  const width = Math.min(bounds.width, area.width)
+  const height = Math.min(bounds.height, area.height)
+  const x = Math.min(Math.max(bounds.x, area.x), area.x + area.width - width)
+  const y = Math.min(Math.max(bounds.y, area.y), area.y + area.height - height)
+  return { x, y, width, height }
+}
+
+/**
+ * The saved bounds when at least 100 × 100 px of them are on a work area, none otherwise. The
+ * bounds are cut to the size of that work area and moved to lie within it.
+ */
 export function initialWindow(
   saved: WindowBounds | undefined,
   workAreas: Rect[],
@@ -88,5 +111,6 @@ export function initialWindow(
   if (!saved) return { maximized: false }
   const { x, y, width, height, maximized } = saved
   const bounds = { x, y, width, height }
-  return workAreas.some((area) => overlaps(bounds, area)) ? { bounds, maximized } : { maximized }
+  const area = workAreas.find((a) => overlaps(bounds, a))
+  return area ? { bounds: fitInto(bounds, area), maximized } : { maximized }
 }

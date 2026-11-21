@@ -186,3 +186,26 @@ test('a Folder closed while zoomed reopens unzoomed', async () => {
     await second.app.close()
   }
 })
+
+test('a Folder picked after the window opened gets its window back', async () => {
+  const { folder, home, file } = await layoutFileOf()
+  const saved = { x: 100, y: 80, width: 1000, height: 700, maximized: false }
+  mkdirSync(dirname(file), { recursive: true })
+  writeFileSync(file, JSON.stringify({ version: 1, folder, window: saved }))
+  const run = await launch({ folder: null, home })
+  try {
+    await run.app.evaluate(({ dialog }, picked) => {
+      dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [picked] })) as never
+    }, folder)
+    await run.page.evaluate(() => window.blueprint.pickFolder())
+    const bounds = await run.app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]?.getBounds(),
+    )
+    expect(Math.abs((bounds?.x ?? 0) - 100)).toBeLessThanOrEqual(2)
+    expect(Math.abs((bounds?.y ?? 0) - 80)).toBeLessThanOrEqual(2)
+    expect(Math.abs((bounds?.width ?? 0) - 1000)).toBeLessThanOrEqual(2)
+    expect(Math.abs((bounds?.height ?? 0) - 700)).toBeLessThanOrEqual(2)
+  } finally {
+    await run.app.close()
+  }
+})
