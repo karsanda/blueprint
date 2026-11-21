@@ -1,0 +1,9 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Blueprint Prototype",
+  "version": "0.0.0",
+  "identifier": "dev.blueprint.prototype",
+  "build": { "frontendDist": "../dist" },
+  "app": { "withGlobalTauri": true, "windows": [], "security": { "csp": null } },
+  "bundle": { "active": false, "icon": ["icons/icon.png"] }
+}

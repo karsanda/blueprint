@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Blueprint — looks prototype</title>
+  <link rel="stylesheet" href="looks.css"><!-- esbuild bundle: xterm.css + fonts -->
+  <link rel="stylesheet" href="looks-page.css"><!-- the two looks -->
+</head>
+<body>
+  <!-- PROTOTYPE: two looks (Blueprint, Riso) x their schemes, switchable with ?variant= and the floating bar. Real terminals, real hooks, real git. -->
+  <div id="app" data-skin="blueprint">
+    <span class="sig-reg tl"></span><span class="sig-reg tr"></span><span class="sig-reg bl"></span><span class="sig-reg br"></span>
+    <header class="titlebar">
+      <span class="app-name">Blueprint</span>
+      <button class="folder" type="button" title="Folder switcher (not wired up in this prototype)"><span id="fname">demo-repo</span><span class="chev">▼</span></button>
+      <span class="branch" id="branch">main</span>
+      <span class="annuns" id="annuns"></span>
+    </header>
+    <div class="grid">
+      <section class="pane" id="p-changes">
+        <div class="head"><div class="tabs"><span class="tab on">Changes</span></div><span class="sub" id="changes-sub"></span></div>
+        <div class="scopes"><button type="button" data-scope="turn" class="on">This turn</button><button type="button" data-scope="session">This session</button></div>
+        <ul class="clist" id="clist"></ul>
+      </section>
+      <section class="pane focus" id="p-claude">
+        <div class="head"><div class="tabs" id="claude-tabs"></div><button class="addtab" id="add-claude" type="button" title="New Claude session in a new tab">+</button><span class="status" id="claude-status"></span></div>
+        <div class="sig-dim" id="claude-dim">columns</div>
+        <div class="terms" id="claude-terms"></div>
+        <div class="sig-tb"><span>Sheet</span><b id="tb-claude">Claude 1</b><span>Rev</span><b id="tb-rev">A</b></div>
+      </section>
+      <section class="pane" id="p-diff">
+        <div class="head"><div class="tabs"><span class="tab on" id="diff-title">Diff</span></div><span class="sub" id="diff-sub"></span></div>
+        <div class="diff" id="diff"></div>
+        <div class="sig-tb"><span>Sheet</span><b id="tb-diff">none</b><span>Rev</span><b id="tb-diff-rev">–</b></div>
+      </section>
+      <section class="pane" id="p-activity">
+        <div class="head"><div class="tabs"><span class="tab on">Activity</span></div></div>
+        <ul class="alist" id="alist"></ul>
+      </section>
+      <section class="pane" id="p-shell">
+        <div class="head"><div class="tabs"><span class="tab on">zsh</span></div><span class="sub" id="shell-sub"></span></div>
+        <div class="terms" id="shell-terms"></div>
+        <div class="sig-tb"><span>Sheet</span><b>zsh</b><span>Rev</span><b>–</b></div>
+      </section>
+    </div>
+    <footer class="keys"><span><b>Alt h j k l</b>focus</span><span><b>Alt Enter</b>split</span><span><b>Alt c</b>new Claude</span><span><b>Alt z</b>zoom</span><span><b>Alt o</b>switch folder</span><span><b>Ctrl p</b>open any file</span></footer>
+  </div>
+
+  <div id="proto-bar" role="toolbar" aria-label="Prototype variant switcher">
+    <button type="button" id="prev" aria-label="Previous variant">‹</button>
+    <span id="vlabel"></span>
+    <button type="button" id="next" aria-label="Next variant">›</button>
+    <label id="paper-ctl" hidden><input type="color" id="paper" value="#163b6a" aria-label="Paper color"><span id="paper-hex">#163b6a</span></label>
+    <span class="hint">← → when no terminal is focused</span>
+  </div>
+  <script type="module" src="looks.js"></script>
+</body>
+</html>

@@ -1,0 +1,41 @@
+/* PROTOTYPE styling: Blueprint "Default" colors, nothing more. */
+:root { --bg: #163b6a; --sheet: #0f2c52; --term: #0b2547; --ink: #e6f0ff; --muted: #a2bde2; --line: #cfe3ff; --soft: rgba(207,227,255,.35); --agent: #ffd166; --wait: #ffa24c; --add: #8fdc9c; --del: #ff8a7a; }
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 13px/1.45 "Inter", "Cantarell", system-ui, sans-serif; display: flex; flex-direction: column;
+  background-image: linear-gradient(rgba(207,227,255,.07) 1px, transparent 1px), linear-gradient(90deg, rgba(207,227,255,.07) 1px, transparent 1px); background-size: 16px 16px; }
+code { font-family: "JetBrains Mono", monospace; font-size: 12px; }
+#top { display: flex; gap: 16px; align-items: center; padding: 8px 14px; border-bottom: 1px solid var(--soft); white-space: nowrap; overflow: hidden; }
+#top .brand { letter-spacing: .2em; }
+#top .proto { color: var(--agent); border: 1px solid var(--agent); padding: 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+#top span { color: var(--muted); }
+.grow { flex: 1; }
+#sub { display: flex; gap: 20px; padding: 4px 14px; color: var(--muted); font-size: 12px; }
+main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: 12px; padding: 10px 12px 12px; }
+#panes { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; min-height: 0; }
+.pane { display: flex; flex-direction: column; min-height: 0; min-width: 0; border: 1.5px solid var(--line); background: var(--sheet); outline: 1px solid var(--soft); outline-offset: 3px; }
+.phead { display: flex; gap: 6px; align-items: center; padding: 6px 8px; border-bottom: 1px solid var(--soft); flex-wrap: wrap; }
+.phead b { text-transform: uppercase; letter-spacing: .1em; font-size: 11px; margin-right: 4px; }
+select, button { font: inherit; font-size: 12px; background: var(--sheet); color: var(--ink); border: 1px solid var(--soft); padding: 2px 6px; }
+button { cursor: pointer; } button:hover { border-color: var(--line); } button:disabled { opacity: .5; }
+.pstat { padding: 4px 8px; color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-bottom: 1px solid var(--soft); }
+.term { flex: 1; min-height: 0; position: relative; background: var(--term); padding: 4px; overflow: hidden; }
+.term > * { height: 100%; }
+#side { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: auto; }
+#side section { border: 1.5px solid var(--line); background: var(--sheet); padding: 8px 10px; }
+#side section.grow { flex: 1; min-height: 240px; display: flex; flex-direction: column; }
+h2 { margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .1em; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+h2 small { text-transform: none; letter-spacing: 0; color: var(--muted); font-weight: 400; }
+table.bench { width: 100%; border-collapse: collapse; font-size: 12px; }
+table.bench th, table.bench td { text-align: left; padding: 3px 4px; border-bottom: 1px solid var(--soft); vertical-align: top; }
+table.bench small { color: var(--muted); }
+ul { list-style: none; margin: 0; padding: 0; }
+#hooks { max-height: 190px; overflow: auto; font-size: 12px; }
+#hooks li { padding: 2px 0; border-bottom: 1px dashed var(--soft); }
+#hooks .t { color: var(--muted); } #hooks i { color: var(--agent); font-style: normal; } #hooks .m { color: var(--muted); }
+.muted, .empty { color: var(--muted); }
+#changes li { padding: 3px 4px; cursor: pointer; display: flex; gap: 6px; align-items: baseline; }
+#changes li.sel, #changes li:hover { background: rgba(207,227,255,.1); }
+#changes .st { width: 12px; } #changes .a { color: var(--add); } #changes .d { color: var(--del); } #changes em { margin-left: auto; color: var(--agent); font-style: normal; font-size: 11px; }
+#diff { margin-top: 8px; flex: 1; overflow: auto; background: var(--term); font: 12px/1.5 "JetBrains Mono", monospace; padding: 6px; white-space: pre; }
+#diff .add { background: rgba(143,220,156,.14); color: #dff7e4; } #diff .del { background: rgba(255,138,122,.16); color: #ffe0db; } #diff .hunk { color: var(--agent); }

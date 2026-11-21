@@ -1,0 +1,33 @@
+{
+  "name": "blueprint-prototype",
+  "private": true,
+  "version": "0.0.0",
+  "description": "THROWAWAY feasibility prototype for Blueprint. Not the real app.",
+  "main": "main.cjs",
+  "scripts": {
+    "sandbox": "bash scripts/make-sandbox.sh",
+    "build": "node scripts/build.mjs",
+    "proto": "node scripts/build.mjs && electron . --no-sandbox",
+    "selftest": "node scripts/build.mjs && PROTO_SELFTEST=1 electron . --no-sandbox",
+    "proto:tauri": "node scripts/build.mjs && cargo run --release --manifest-path src-tauri/Cargo.toml",
+    "selftest:tauri": "node scripts/build.mjs && PROTO_SELFTEST=1 cargo run --release --manifest-path src-tauri/Cargo.toml",
+    "looks": "node scripts/build.mjs && PROTO_PAGE=looks electron . --no-sandbox",
+    "looks:shots": "bash scripts/make-sandbox.sh shots-repo && node scripts/build.mjs && BLUEPRINT_REPO=.sandbox/shots-repo PROTO_PAGE=looks PROTO_SHOTS=.shots electron . --no-sandbox"
+  },
+  "dependencies": {
+    "@fontsource-variable/anybody": "5.3.0",
+    "@fontsource-variable/cascadia-code": "5.3.0",
+    "@fontsource-variable/jetbrains-mono": "5.3.0",
+    "@fontsource-variable/recursive": "5.3.0",
+    "@fontsource/overpass": "5.3.0",
+    "@fontsource/overpass-mono": "5.3.0",
+    "@xterm/addon-fit": "0.11.0",
+    "@xterm/addon-webgl": "0.19.0",
+    "@xterm/xterm": "6.0.0",
+    "electron": "^45.4.1",
+    "esbuild": "^0.28.2",
+    "ghostty-web": "0.4.0",
+    "node-pty": "1.1.0",
+    "restty": "0.3.0"
+  }
+}

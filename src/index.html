@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Blueprint prototype</title>
+  <link rel="stylesheet" href="app.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header id="top">
+    <b class="brand">BLUEPRINT</b><span class="proto">throwaway feasibility prototype</span>
+    <span id="shellinfo"></span><span id="sess"></span><span id="gpu"></span>
+    <span class="grow"></span>
+    <span id="mem"></span><span id="fps"></span>
+  </header>
+  <div id="sub"><span>Folder <code id="repo"></code></span><span id="hookport"></span></div>
+  <main>
+    <div id="panes"></div>
+    <aside id="side">
+      <section>
+        <h2>Benchmark <small>6 MB of colored, wide-character output written straight into the engine</small></h2>
+        <table class="bench"><thead><tr><th>Shell</th><th>Engine</th><th>Speed</th><th>Time</th><th>Frames over 50 ms</th><th>Worst frame</th></tr></thead><tbody id="bench"></tbody></table>
+      </section>
+      <section>
+        <h2>Hook events <small id="hookcount">0</small></h2>
+        <ul id="hooks"></ul>
+      </section>
+      <section class="grow">
+        <h2>Changes
+          <select id="cpane"><option value="A">Pane A</option><option value="B">Pane B</option></select>
+          <select id="cscope"><option value="turn">This turn</option><option value="session">This session</option></select>
+          <button id="crefresh">Refresh</button>
+        </h2>
+        <p id="snapinfo" class="muted"></p>
+        <ul id="changes"></ul>
+        <div id="diff"></div>
+      </section>
+    </aside>
+  </main>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
