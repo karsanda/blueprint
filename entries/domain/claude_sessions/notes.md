@@ -63,8 +63,8 @@ Checked on 2026-11-21 with a real session whose hooks logged every event:
 - The built app showed part of it again:
   - The file of a failing `Bash` command counted as Claude's, so `PostToolUseFailure` arrived.
   - A background subagent's write counted as Claude's, in a later turn.
-  - The late file of a background command counted as outside Claude, so `PostToolUse` came when it started.
-  - This turn did not reset when the background command ended, so the `<task-notification>` prompt did not start a turn.
+  - The late file of a background command counted as outside Claude.
+  - This turn did not reset when the background command ended.
 - The Agent tool can run a subagent in the background. Its tool hooks and permission prompts then arrive after the turn that started it ended.
 
 ### Rules
