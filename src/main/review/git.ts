@@ -39,27 +39,31 @@ function errorCode(error: unknown): unknown {
   return error instanceof Error && 'code' in error ? error.code : undefined
 }
 
-/** The empty tree. Attributes read from it are none, so no `.gitattributes` filter, driver or eol rule runs. */
-const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'
-/** Config on top of the Developer's that keeps git from writing into the repository or running their code. */
+/** Config on top of the Developer's that keeps git from writing into the repository or running their hooks. */
 const ISOLATING_CONFIG: [string, string][] = [
   ['core.fsmonitor', 'false'],
   ['core.splitIndex', 'false'],
   ['core.hooksPath', '/dev/null'],
   ['gc.auto', '0'],
+  // With `core.autocrlf`, `true` refuses a file with mixed line endings. It only checks; it never writes.
+  ['core.safecrlf', 'false'],
 ]
 
 /**
- * The environment of every git command Blueprint runs. Whatever the repository's config and attributes say,
- * git starts no daemon, writes no split index, runs no hook or filter, collects no garbage and reads
- * pathspecs literally.
+ * Leaves out the files Git LFS stores. Its filter would write each one into `.git/lfs`, and its whole content
+ * into the store, on every launch. Their Changes are not listed.
+ */
+const NOT_LFS = ':(exclude,attr:filter=lfs)'
+
+/**
+ * The environment of every git command Blueprint runs. Whatever the repository's config says, git starts no
+ * daemon, writes no split index, runs no hook and collects no garbage. The repository's attributes apply,
+ * so its eol rules and clean filters run as in the Developer's own `git add`.
  */
 function gitEnv(extra: Record<string, string> = {}): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     GIT_CONFIG_COUNT: String(ISOLATING_CONFIG.length),
-    GIT_ATTR_SOURCE: EMPTY_TREE,
-    GIT_LITERAL_PATHSPECS: '1',
     ...extra,
   }
   ISOLATING_CONFIG.forEach(([key, value], i) => {
@@ -88,7 +92,8 @@ function run(
     // Gives up at once, even on a git that does not end when killed, so nothing waits on it any longer.
     const timer = setTimeout(() => {
       child.kill()
-      reject(new Error(`git ${args[0]} gave no answer in ${timeoutMs} ms`))
+      const command = args.find((arg) => !arg.startsWith('-'))
+      reject(new Error(`git ${command} gave no answer in ${timeoutMs} ms`))
     }, timeoutMs)
   })
 }
@@ -139,7 +144,7 @@ export class SnapshotStore {
   snapshot(): Promise<string> {
     this.running++
     const result = this.chain.then(async () => {
-      await this.exec(['add', '-A', '--', '.'])
+      await this.exec(['add', '-A', '--', '.', NOT_LFS])
       return (await this.exec(['write-tree'])).trim()
     })
     this.chain = result.then(
@@ -159,8 +164,10 @@ export class SnapshotStore {
     return parseChanges(raw, numstat)
   }
 
+  /** `--literal-pathspecs` makes a path like `app/[id]/page.tsx` name that file only, not a glob. */
   diff(base: string, now: string, path: string): Promise<string> {
     return this.exec([
+      '--literal-pathspecs',
       'diff',
       '--no-color',
       '--no-ext-diff',

@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { createHash } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import {
   chmodSync,
   existsSync,
@@ -74,6 +74,26 @@ function hangingGit(): { git: string; release(): void } {
   return { git: program, release: () => rmSync(hang) }
 }
 
+/** The Git LFS pointer of a file with this content, as the repository stores it. */
+function lfsPointer(content: Buffer): string {
+  const oid = createHash('sha256').update(content).digest('hex')
+  return `version https://git-lfs.github.com/spec/v1\noid sha256:${oid}\nsize ${content.length}\n`
+}
+
+/** Every path under the repository's `.git`, recursively. */
+function gitListing(repo: string): string[] {
+  return readdirSync(join(repo, '.git'), { recursive: true }).map(String).toSorted()
+}
+
+/** The bytes of every file under `dir`. */
+function bytesUnder(dir: string): number {
+  let total = 0
+  for (const e of readdirSync(dir, { withFileTypes: true, recursive: true })) {
+    if (e.isFile()) total += statSync(join(e.parentPath, e.name)).size
+  }
+  return total
+}
+
 function objectFiles(repo: string): string[] {
   const out: string[] = []
   const walk = (dir: string, rel: string): void => {
@@ -142,15 +162,17 @@ describe('SnapshotStore', () => {
     expect((await store.changes(before, after)).map((c) => c.path)).toEqual(['untracked.txt'])
   })
 
-  it('a Folder inside a repository sees only its own files, relative to it', async () => {
+  it('a Folder inside a repository sees only its own files, relative to it, Git LFS files left out', async () => {
     const repo = makeRepo()
     mkdirSync(join(repo, 'sub'))
+    writeFileSync(join(repo, '.gitattributes'), '*.bin filter=lfs diff=lfs merge=lfs -text\n')
     writeFileSync(join(repo, 'sub', 'x.txt'), 'x\n')
     git(repo, 'add', '-A')
     git(repo, 'commit', '-q', '-m', 'sub')
     const store = await open(join(repo, 'sub'))
     const before = await store.snapshot()
     writeFileSync(join(repo, 'sub', 'x.txt'), 'y\n')
+    writeFileSync(join(repo, 'sub', 'y.bin'), 'stored with Git LFS\n')
     writeFileSync(join(repo, 'a.txt'), 'ONE\ntwo\n')
     const after = await store.snapshot()
     expect((await store.changes(before, after)).map((c) => c.path)).toEqual(['x.txt'])
@@ -219,13 +241,15 @@ describe('SnapshotStore', () => {
     expect(await store.snapshot()).toMatch(/^[0-9a-f]{40}$/)
   })
 
-  it('a repository with no commits works', async () => {
+  it('a repository with no commits works, Git LFS files left out', async () => {
     const repo = temp('bp-repo-')
     git(repo, 'init', '-q')
+    writeFileSync(join(repo, '.gitattributes'), '*.bin filter=lfs diff=lfs merge=lfs -text\n')
     writeFileSync(join(repo, 'a.txt'), 'one\n')
     const store = await open(repo)
     const before = await store.snapshot()
     writeFileSync(join(repo, 'new.txt'), 'x\n')
+    writeFileSync(join(repo, 'new.bin'), 'stored with Git LFS\n')
     const after = await store.snapshot()
     expect((await store.changes(before, after)).map((c) => c.path)).toEqual(['new.txt'])
   })
@@ -241,29 +265,63 @@ describe('SnapshotStore', () => {
 })
 
 describe("SnapshotStore with the Developer's git config", () => {
-  it('snapshots leave .git as it was, and run no daemon, hook or filter of the repository', async () => {
+  it('snapshots leave .git as it was, and run no daemon or hook of the repository', async () => {
     const repo = makeRepo()
     const marks = temp('bp-marks-')
-    writeFileSync(join(repo, '.gitattributes'), '*.txt filter=mark\n')
-    git(repo, 'add', '.gitattributes')
-    git(repo, 'commit', '-q', '-m', 'attributes')
     git(repo, 'config', 'core.fsmonitor', 'true')
     git(repo, 'config', 'core.splitIndex', 'true')
-    git(repo, 'config', 'filter.mark.clean', `touch '${join(marks, 'filter')}' && cat`)
     const hook = join(repo, '.git', 'hooks', 'post-index-change')
     writeFileSync(hook, `#!/bin/sh\ntouch '${join(marks, 'hook')}'\n`)
     chmodSync(hook, 0o755)
-    const listing = (): string[] =>
-      readdirSync(join(repo, '.git'), { recursive: true }).map(String).toSorted()
-    const before = listing()
+    const before = gitListing(repo)
     const store = await open(repo)
     const first = await store.snapshot()
     writeFileSync(join(repo, 'a.txt'), 'ONE\ntwo\n')
     const second = await store.snapshot()
     expect((await store.changes(first, second)).map((c) => c.path)).toEqual(['a.txt'])
-    expect(listing()).toEqual(before)
-    expect(existsSync(join(marks, 'filter'))).toBe(false)
+    expect(gitListing(repo)).toEqual(before)
     expect(existsSync(join(marks, 'hook'))).toBe(false)
+  })
+
+  it('files stored with Git LFS are left out: its filter never runs, and nothing of them is copied', async () => {
+    const repo = makeRepo()
+    const marks = temp('bp-marks-')
+    writeFileSync(join(repo, '.gitattributes'), '*.bin filter=lfs diff=lfs merge=lfs -text\n')
+    const content = randomBytes(2_000_000)
+    // The repository holds the pointer, as after a commit through git-lfs.
+    writeFileSync(join(repo, 'asset.bin'), lfsPointer(content))
+    git(repo, 'add', '-A')
+    git(repo, 'commit', '-q', '-m', 'lfs')
+    writeFileSync(join(repo, 'asset.bin'), content)
+    // Stand-ins for git-lfs, which writes each file it cleans into .git/lfs/objects.
+    git(repo, 'config', 'filter.lfs.clean', `touch '${join(marks, 'clean')}' && cat`)
+    git(repo, 'config', 'filter.lfs.process', `touch '${join(marks, 'process')}'`)
+    git(repo, 'config', 'filter.lfs.required', 'true')
+    const before = gitListing(repo)
+    const storeDir = temp('bp-store-')
+    const store = await SnapshotStore.open(repo, storeDir)
+    if (!(store instanceof SnapshotStore)) throw new Error(`open failed: ${store.problem}`)
+    const first = await store.snapshot()
+    expect(readdirSync(marks)).toEqual([])
+    expect(gitListing(repo)).toEqual(before)
+    expect(bytesUnder(join(storeDir, 'objects'))).toBeLessThan(64 * 1024)
+    writeFileSync(join(repo, 'asset.bin'), randomBytes(2_000_000))
+    writeFileSync(join(repo, 'a.txt'), 'ONE\ntwo\n')
+    const second = await store.snapshot()
+    expect((await store.changes(first, second)).map((c) => c.path)).toEqual(['a.txt'])
+    expect(readdirSync(marks)).toEqual([])
+    expect(gitListing(repo)).toEqual(before)
+  })
+
+  it('a file with mixed line endings snapshots under core.autocrlf=input and core.safecrlf=true', async () => {
+    const repo = makeRepo()
+    git(repo, 'config', 'core.autocrlf', 'input')
+    git(repo, 'config', 'core.safecrlf', 'true')
+    const store = await open(repo)
+    const before = await store.snapshot()
+    writeFileSync(join(repo, 'mixed.txt'), 'one\r\ntwo\n')
+    const after = await store.snapshot()
+    expect((await store.changes(before, after)).map((c) => c.path)).toEqual(['mixed.txt'])
   })
 
   it('diff shows plain added and removed lines with an external diff tool and no prefixes set', async () => {
