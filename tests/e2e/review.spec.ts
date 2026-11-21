@@ -170,9 +170,13 @@ test('This session lists the Changes from both turns of a session', async () => 
 })
 
 test('This session survives /clear', async () => {
-  const { page } = await launch({ folder: gitFolder() })
+  const { page, log } = await launch({ folder: gitFolder() })
   await readyClaude(page)
   await typeInto(page, 'claude-1', 'pwsc')
+  // The fake clears only after the posts typed before it, as Claude Code would.
+  await expect
+    .poll(() => readLog(log, 'claude.hooks'))
+    .toBe('UserPromptSubmit 204\nPostToolUse 204\nStop 204\nclear\n')
   await typeInto(page, 'claude-1', 'pw')
   await page.getByRole('button', { name: 'This session' }).click()
   await expect.poll(() => rowPaths(page)).toEqual(['claude-1.txt', 'claude-2.txt'])

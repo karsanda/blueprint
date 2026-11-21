@@ -103,11 +103,13 @@ const hookKeys = {
   g: () =>
     post('UserPromptSubmit', { prompt: '<task-notification>\n<task-id>b1</task-id>\n</task-notification>' }),
   // Stands in for /clear: Claude Code gives the conversation a new session id and a new transcript.
-  c: () => {
-    sessionId = randomUUID()
-    transcript = join(log, `claude.transcript-${++clears}.jsonl`)
-    out('hooks', 'clear\n')
-  },
+  // It waits behind earlier posts, so they still carry the old session.
+  c: () =>
+    later(() => {
+      sessionId = randomUUID()
+      transcript = join(log, `claude.transcript-${++clears}.jsonl`)
+      out('hooks', 'clear\n')
+    }),
   x: () => appendFileSync(transcript, interrupt + '\n'),
   // Focus reporting stays off until a test asks: two tests check the exact bytes typed into the fake.
   r: () => process.stdout.write('\x1b[?1004h'),
