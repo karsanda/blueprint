@@ -1,5 +1,7 @@
 import { join } from 'node:path'
 import { app, BrowserWindow } from 'electron'
+import { resolveFolder } from './folder'
+import { registerIpc } from './ipc'
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -22,5 +24,8 @@ function createWindow(): BrowserWindow {
   return win
 }
 
-void app.whenReady().then(createWindow)
+void app.whenReady().then(() => {
+  const folder = resolveFolder(process.argv, { packaged: app.isPackaged, cwd: process.cwd() })
+  registerIpc(createWindow(), { folder })
+})
 app.on('window-all-closed', () => app.quit())
