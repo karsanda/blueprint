@@ -18,6 +18,17 @@ Code-level detail for [Talk to Claude in a pane](../../usecase/blueprint/talk_to
 - Resume after reopening: `claude --resume <session-id>`.
 - No Agent SDK: it needs API-key billing. The CLI uses the Developer's own sign-in.
 
+## Several sessions
+
+Detail for [Run several Claude sessions](../../usecase/blueprint/run_several_claude_sessions.md).
+
+- Each Claude tab is one Claude start, with its own `--session-id`, start key and hook settings file. Status, notifications and the review already follow the start key, so they need nothing new.
+- Starting: every group that holds a Claude tab gets a `+` header action named "New Claude session". It adds a tab `claude-<n>` titled `Claude <n>` to that group, active and focused. `n` is one more than the highest number among the open Claude tabs; the first tab, `claude-1`, is titled `Claude`.
+- Closing: Claude tabs get a close action (button and middle-click), except the last open Claude tab. An Idle session closes at once. A Working or Needs-you session asks first, in Blueprint's own dialog. Closing ends the program, forgets its start key, clears its status, and ends its review session. Shells, Changes and Difference still have no close action.
+- Renaming: double-click a Claude tab's title to edit it in place. Enter or leaving the field keeps the new name, Escape the old one; an empty name keeps the old one. The name is the dockview panel title, so the window title, notifications, the Changes pane and the close question all read it, and the layout file saves it.
+- Restored layouts accept `claude-<n>` tabs (terminal, kind `claude`). Each starts a fresh session.
+- Chromium allows about 16 WebGL contexts. When it drops one, that terminal falls back to xterm's DOM renderer, which `onContextLoss` already handles.
+
 ## Learning the status
 
 Status comes from three sources: Claude Code's hooks, the keys the Developer types, and the session's transcript. Hooks alone are not enough, because some answers and every refusal fire no hook (see below).

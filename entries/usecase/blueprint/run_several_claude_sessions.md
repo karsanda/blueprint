@@ -54,6 +54,10 @@ Test cases:
 
 Covers: Alternative Flow 2.
 
+Work items:
+
+- [ ] Rename a session's tab, and use the new name everywhere
+
 Test cases:
 
 - Given a renamed session, when it edits a file, then the Change shows the new name.
@@ -61,6 +65,8 @@ Test cases:
 ## Known gaps
 
 - All sessions share one Folder. Separate working copies per session come after the MVP.
+- While Claude Code runs a command for one session, another session's changes also count as the first session's.
+- An overlap warning stays until one of the two sessions closes.
 
 ## Resources
 
