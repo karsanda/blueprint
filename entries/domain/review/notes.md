@@ -64,7 +64,11 @@ Claude touched a path when:
 - a `PostToolUse` for `Write`, `Edit` or `NotebookEdit` named it (`tool_input.file_path`, or `tool_input.notebook_path`). The path is absolute; Blueprint makes it relative to the Folder.
 - it differs between the snapshots before and after one of Claude's `Bash` commands. The two hooks share a `tool_use_id`, and the after snapshot comes from `PostToolUse` or, when the command fails, `PostToolUseFailure`.
 
-A subagent's tool hooks reach the same start key, so its edits count as the session's. Blueprint keeps the touched paths with the turn each was touched in. A path Claude touched in an earlier turn and the Developer changed since counts as outside Claude in the later turn.
+A subagent's tool hooks reach the same start key, so its edits count as the session's.
+
+Claude Code can run a subagent in the background. The turn then ends at once. The subagent's edits, and its permission prompts, arrive during a later turn. There they count as Claude's.
+
+Blueprint keeps the touched paths with the turn each was touched in. A path Claude touched in an earlier turn and the Developer changed since counts as outside Claude in the later turn.
 
 Known gaps, also listed in the use case:
 
@@ -87,7 +91,18 @@ Known gaps, also listed in the use case:
 - Revision clouds mark Claude's Changes only. A Change outside Claude shows plain.
 - The revision cloud is a scalloped SVG path sized to the block (`cloudPath` in `~/Workspace/blueprint-prototype/src/looks/looks.js`).
 
+## Checked in the real app
+
+Checked on 2026-11-21 with the built app and Claude Code 2.1.330, in manual mode, on a scratch Git repository:
+
+- `Write`, `Edit` and `Bash` Changes showed as Claude's in This turn. A failed `Bash` command did too.
+- Each permission prompt stayed open until answered, so Blueprint's `PreToolUse` hook did not answer it. Folder hooks ran beside Blueprint's.
+- An edit from the Shell pane showed as outside Claude within 1 second.
+- A background command left This turn unchanged. Its late file showed as outside Claude, the known gap.
+- This session kept every earlier Change, also after `/clear`.
+- The difference showed one revision cloud on Claude's Change, and none on a Change outside Claude.
+- The repository's object count and `git status` were untouched, apart from the changed files.
+
 ## Open checks
 
-- The prompt holds and Claude Code's own prompts were checked with `claude -p`. The interactive app is not yet checked.
 - The store's trees can point at objects that live only in the repository. If the Developer's `git gc` prunes one during a session, a diff fails. Untested.

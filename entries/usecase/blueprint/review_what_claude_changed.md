@@ -48,10 +48,10 @@ Covers: Basic Flow, Alternative Flow 2, Alternative Flow 3, Alternative Flow 4, 
 
 Work items:
 
-- [ ] Record the Folder's state on each prompt
-- [ ] List each Change since the prompt, with who made it
-- [ ] Show the difference with revision clouds on Claude's changes
-- [ ] Refresh the list and the difference when files change
+- [x] Record the Folder's state on each prompt
+- [x] List each Change since the prompt, with who made it
+- [x] Show the difference with revision clouds on Claude's changes
+- [x] Refresh the list and the difference when files change
 
 Test cases:
 
@@ -67,7 +67,7 @@ Covers: Alternative Flow 1.
 
 Work items:
 
-- [ ] Switch the list between This turn and This session
+- [x] Switch the list between This turn and This session
 
 Test cases:
 

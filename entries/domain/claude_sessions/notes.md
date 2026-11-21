@@ -59,7 +59,8 @@ Checked on 2026-11-21 with a real session whose hooks logged every event:
 - A subagent's tool hooks carry the session's `session_id`, plus `agent_id` and `agent_type`.
 - `Bash` with `run_in_background` fires `PostToolUse` when the command starts, not when it ends.
 - A `Bash` command that fails fires `PostToolUseFailure` instead of `PostToolUse`, with the same `tool_use_id`.
-- These last four were checked with `claude -p`, on Haiku.
+- These last four were checked with `claude -p`, on Haiku, and again in the built app.
+- The Agent tool can run a subagent in the background. Its tool hooks and permission prompts then arrive after the turn that started it ended.
 
 ### Rules
 
