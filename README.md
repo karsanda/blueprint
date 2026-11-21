@@ -10,4 +10,4 @@ A desktop app that puts Claude Code, terminals and a review of what Claude chang
 
 [MIT](LICENSE).
 
-The use case template, the `usecase` and `actor` skills and the link-check script are adapted from Vidio's internal `vidio-usecase` repository. Before publishing this repository, get its owners' OK for those parts, or rewrite them.
+The use case template, the `usecase` and `actor` skills and the link-check script are adapted from Vidio's `vidio-usecase` repository.
