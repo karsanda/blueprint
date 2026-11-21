@@ -1,5 +1,5 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
-import { launch, probeSize, probeText, readLog } from './launch'
+import { dropTab, launch, probeSize, probeText, readLog } from './launch'
 
 function groupWith(page: Page, title: string): Locator {
   return page.locator('.dv-groupview', { has: page.locator('.dv-tab', { hasText: title }) })
@@ -17,41 +17,6 @@ async function tabTitles(group: Locator): Promise<string[]> {
 
 function lastLine(text: string): string {
   return text.trim().split('\n').at(-1) ?? ''
-}
-
-/**
- * Drags a tab onto a point of the page with the HTML5 drag events dockview listens for.
- * Playwright's dragTo starts a native drag session, which hangs a visible Electron window on Wayland.
- */
-async function dropTab(page: Page, title: string, x: number, y: number): Promise<void> {
-  const fire = (type: string, at: 'tab' | 'point') =>
-    page.evaluate(
-      (e) => {
-        const tab = [...document.querySelectorAll('.dv-tab')].find((t) => t.textContent?.trim() === e.title)
-        if (!tab) throw new Error(`No tab ${e.title}`)
-        window.dragData ??= new DataTransfer()
-        const r = tab.getBoundingClientRect()
-        const [cx, cy] = e.at === 'tab' ? [r.x + 5, r.y + 5] : [e.x, e.y]
-        const el = e.at === 'tab' ? tab : document.elementFromPoint(e.x, e.y)
-        el?.dispatchEvent(
-          new DragEvent(e.type, {
-            bubbles: true,
-            cancelable: true,
-            clientX: cx,
-            clientY: cy,
-            dataTransfer: window.dragData,
-          }),
-        )
-        if (e.type === 'dragend') window.dragData = undefined
-      },
-      { title, type, at, x, y },
-    )
-  await fire('dragstart', 'tab')
-  for (const type of ['dragenter', 'dragover', 'dragover', 'drop']) {
-    await page.waitForTimeout(50)
-    await fire(type, 'point')
-  }
-  await fire('dragend', 'tab')
 }
 
 async function ready(page: Page): Promise<void> {
@@ -143,13 +108,14 @@ test('zooming out returns the previous layout', async () => {
   await ready(page)
   const claude = groupWith(page, 'Claude')
   const shell = groupWith(page, 'Shell')
-  const [claudeBefore, shellBefore] = [await box(claude), await box(shell)]
+  const changes = groupWith(page, 'Changes')
+  const [claudeBefore, shellBefore, changesBefore] = [await box(claude), await box(shell), await box(changes)]
   await page.waitForTimeout(300)
   const shellSizes = readLog(log, 'fake-shell.size')
 
   await claude.getByRole('button', { name: 'Zoom pane' }).click()
   await expect(shell).toBeHidden()
-  expect((await box(claude)).width).toBeGreaterThan(shellBefore.width)
+  expect((await box(claude)).width).toBeGreaterThan(changesBefore.width + shellBefore.width)
   // The hidden pane's program keeps its size: it is never squeezed to nothing.
   await page.waitForTimeout(300)
   expect(readLog(log, 'fake-shell.size')).toBe(shellSizes)

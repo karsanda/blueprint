@@ -142,3 +142,38 @@ export async function watchReview(page: Page): Promise<void> {
 export async function lastReview(page: Page): Promise<ReviewState | undefined> {
   return page.evaluate(() => window.reviewStates?.at(-1))
 }
+
+/**
+ * Drags a tab onto a point of the page with the HTML5 drag events dockview listens for.
+ * Playwright's dragTo starts a native drag session, which hangs a visible Electron window on Wayland.
+ */
+export async function dropTab(page: Page, title: string, x: number, y: number): Promise<void> {
+  const fire = (type: string, at: 'tab' | 'point') =>
+    page.evaluate(
+      (e) => {
+        const tab = [...document.querySelectorAll('.dv-tab')].find((t) => t.textContent?.trim() === e.title)
+        if (!tab) throw new Error(`No tab ${e.title}`)
+        window.dragData ??= new DataTransfer()
+        const r = tab.getBoundingClientRect()
+        const [cx, cy] = e.at === 'tab' ? [r.x + 5, r.y + 5] : [e.x, e.y]
+        const el = e.at === 'tab' ? tab : document.elementFromPoint(e.x, e.y)
+        el?.dispatchEvent(
+          new DragEvent(e.type, {
+            bubbles: true,
+            cancelable: true,
+            clientX: cx,
+            clientY: cy,
+            dataTransfer: window.dragData,
+          }),
+        )
+        if (e.type === 'dragend') window.dragData = undefined
+      },
+      { title, type, at, x, y },
+    )
+  await fire('dragstart', 'tab')
+  for (const type of ['dragenter', 'dragover', 'dragover', 'drop']) {
+    await page.waitForTimeout(50)
+    await fire(type, 'point')
+  }
+  await fire('dragend', 'tab')
+}

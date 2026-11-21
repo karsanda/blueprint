@@ -2,7 +2,7 @@ import { appendFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, type Page, test } from '@playwright/test'
 import type { ReviewState } from '../../src/shared/api'
-import { gitFolder, lastReview, launch, probeText, readLog, typeInto, watchReview } from './launch'
+import { dropTab, gitFolder, lastReview, launch, probeText, readLog, typeInto, watchReview } from './launch'
 
 function paths(state: ReviewState | undefined): [string, boolean][] | undefined {
   return state?.kind === 'changes'
@@ -176,4 +176,35 @@ test('This session survives /clear', async () => {
   await typeInto(page, 'claude-1', 'pw')
   await page.getByRole('button', { name: 'This session' }).click()
   await expect.poll(() => rowPaths(page)).toEqual(['claude-1.txt', 'claude-2.txt'])
+})
+
+test('the review stops refreshing while the Changes pane is hidden', async () => {
+  const folder = gitFolder()
+  const { page, log } = await launch({ folder })
+  await readyClaude(page)
+  const target = (await page
+    .locator('.dv-groupview', { has: page.locator('.dv-tab', { hasText: 'Shell' }) })
+    .locator('.dv-content-container')
+    .boundingBox())!
+  await dropTab(page, 'Changes', target.x + target.width / 2, target.y + target.height / 2)
+  await expect(
+    page.locator('.dv-groupview', { has: page.locator('.dv-tab', { hasText: 'Changes' }) }),
+  ).toContainText('Shell')
+  await page.locator('.dv-tab', { hasText: 'Shell' }).click()
+  await expect(page.locator('[data-tab="changes"]')).toBeHidden()
+  await page.evaluate(() => {
+    window.reviewStates = []
+    window.blueprint.onReviewUpdate((state) => window.reviewStates?.push(state))
+  })
+  await typeInto(page, 'claude-1', 'p')
+  await expect.poll(() => readLog(log, 'claude.hooks')).toContain('UserPromptSubmit 204')
+  writeFileSync(join(folder, 'README.md'), 'changed while hidden\n')
+  await page.waitForTimeout(3000)
+  const listed = () =>
+    page.evaluate(() =>
+      (window.reviewStates ?? []).flatMap((s) => (s.kind === 'changes' ? s.changes.map((c) => c.path) : [])),
+    )
+  expect(await listed()).not.toContain('README.md')
+  await page.locator('.dv-tab', { hasText: 'Changes' }).click()
+  await expect.poll(listed, { timeout: 5000 }).toContain('README.md')
 })

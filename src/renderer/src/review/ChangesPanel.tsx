@@ -16,6 +16,11 @@ export function ChangesPanel({ api, containerApi }: IDockviewPanelProps) {
   useEffect(() => {
     window.blueprint.setReviewView({ range, visible })
   }, [range, visible])
+  // A pane that goes away is no longer visible, whatever it last reported.
+  useEffect(
+    () => () => window.blueprint.setReviewView({ range: useReview.getState().range, visible: false }),
+    [],
+  )
 
   return (
     <div className="bp-changes" data-tab="changes">
