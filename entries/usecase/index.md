@@ -7,6 +7,7 @@ description: Every Blueprint use case, grouped by label, with the MVP build orde
 Every use case lives in [blueprint/](blueprint) for the [Blueprint](../system/blueprint.md) System. Each one carries `labels` in its frontmatter; this index groups them by label.
 
 - [Actors](../actors/index.md)
+- [Diagram](../diagram/blueprint.puml): every use case and its actors, in PlantUML
 - [Glossary](../domain/glossary.md)
 - [Agent guide](../../AGENTS.md)
 

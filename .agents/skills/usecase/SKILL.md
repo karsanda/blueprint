@@ -11,13 +11,14 @@ A use case is all the ways one actor achieves one goal, told without code. Share
 
 Update every file marked in the row, in the same change.
 
-| Change | Use case file | `entries/usecase/index.md` | `entries/domain/glossary.md` |
-| --- | --- | --- | --- |
-| Add a use case | create | add a line | if a shared term is new |
-| Rename a use case | `git mv`, update `title` and every link to it | update the line | no |
-| Change its labels | edit `labels` | move the line | no |
-| Retire a use case | set `status: retired` | keep the line, add "(retired)" | no |
-| Add or change a shared term | link to the glossary | no | yes |
+| Change | Use case file | `entries/usecase/index.md` | `entries/domain/glossary.md` | `entries/diagram/blueprint.puml` |
+| --- | --- | --- | --- | --- |
+| Add a use case | create | add a line | if a shared term is new | add it and its actor lines |
+| Rename a use case | `git mv`, update `title` and every link to it | update the line | no | update its label and link |
+| Change its labels | edit `labels` | move the line | no | no |
+| Change its actors, `Includes` or `Extend` | edit the frontmatter | no | no | update its lines |
+| Retire a use case | set `status: retired` | keep the line, add "(retired)" | no | remove it |
+| Add or change a shared term | link to the glossary | no | yes | no |
 
 If the primary actor has no file in `entries/actors/`, use the `actor` skill to add it first. If the change moves something across the System boundary, use the `actor` skill for `entries/system/blueprint.md`.
 
@@ -34,7 +35,7 @@ If the primary actor has no file in `entries/actors/`, use the `actor` skill to 
    - `## Slice n: <name>`: a delivery unit with real value to the actor. Contains `Covers:` (which flows), `Work items:` (checkbox list, linked to tracker issues when known) and `Test cases:` (Given / when / then lines). Leave a blank line after each label.
    - Optional reference sections: rules, tables, known gaps.
    - `## Terms`, then `## Resources` (designs, decisions, related use cases, notes).
-6. Add the line `- [<Title>](blueprint/<slug>.md)` under the label heading in `entries/usecase/index.md`.
+6. Add the line `- [<Title>](blueprint/<slug>.md)` under the label heading in `entries/usecase/index.md`. Add the use case and its actor lines to `entries/diagram/blueprint.puml`.
 7. Check terms with the glossary rules below.
 8. Run `task check`.
 
