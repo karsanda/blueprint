@@ -71,6 +71,7 @@ Checked on 2026-11-21 with the built app, Claude Code 2.1.330 in manual mode, an
 - An `AskUserQuestion` question showed Needs you, and answering it showed Working, then Idle.
 - The session stayed Idle for 75 seconds after a turn, so `idle_prompt` is ignored.
 - The folder's own hooks still ran beside Blueprint's.
+- After `/clear`, a permission prompt still showed Needs you. Refusing it reached Idle, and a finished turn showed Idle.
 
 ## Open checks
 
