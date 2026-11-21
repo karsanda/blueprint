@@ -1,0 +1,7 @@
+version: '3'
+
+tasks:
+  check:
+    desc: Check that every relative link resolves (prints only check-done)
+    cmds:
+      - sh scripts/check_links_integrity.sh

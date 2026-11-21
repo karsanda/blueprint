@@ -1,0 +1,7 @@
+node_modules/
+out/
+dist/
+.shots/
+.sandbox/
+.superpowers/
+entries/diagram/*.svg
