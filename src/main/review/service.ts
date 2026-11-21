@@ -210,6 +210,8 @@ export class ReviewService {
     this.sessions.set(startKey, session)
     this.shownKey = startKey
     this.sendOverlapsIfChanged()
+    // The header and the list both follow the view's tab, which now has its session.
+    if (this.view.tabId === tabId) this.background(() => this.refresh(true))
     return session.base?.done
   }
 
@@ -249,7 +251,12 @@ export class ReviewService {
           try {
             if (store && before && after) {
               const [from, to] = await Promise.all([before, after])
-              for (const change of await store.changes(from, to)) this.touch(change.path, session.tabId)
+              const changes = await store.changes(from, to)
+              this.log.touchAll(
+                changes.map((c) => c.path),
+                session.tabId,
+              )
+              this.sendOverlapsIfChanged()
             }
           } finally {
             await this.refresh()

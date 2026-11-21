@@ -54,4 +54,20 @@ describe('attribution', () => {
       { tabId: 'B', others: ['A'], paths: ['x'] },
     ])
   })
+
+  it('stays fast for a Bash change of 20,000 files', () => {
+    const log = new TouchLog()
+    const paths = Array.from({ length: 20_000 }, (_, i) => `dir/file_${i}.txt`)
+    const started = performance.now()
+    log.touchAll(paths, 'A')
+    log.touchAll(paths.slice(0, 10_000), 'B')
+    for (const p of paths) log.by(p, 0)
+    const overlaps = log.overlaps([
+      { tabId: 'A', since: 0 },
+      { tabId: 'B', since: 0 },
+    ])
+    expect(performance.now() - started).toBeLessThan(500)
+    expect(overlaps.map((o) => o.tabId)).toEqual(['A', 'B'])
+    expect(overlaps[0].paths).toHaveLength(10_000)
+  })
 })

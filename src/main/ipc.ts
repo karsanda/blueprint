@@ -53,6 +53,7 @@ export function registerIpc(win: BrowserWindow, deps: IpcDeps, userData: string)
     deps.manager.kill(tabId)
     deps.relay.unregister(tabId)
     deps.review.endSession(tabId)
+    deps.notifier.forget(tabId)
   })
   ipcMain.on('terminal:write', (_e, tabId: string, data: string) => deps.manager.write(tabId, data))
   ipcMain.on('terminal:resize', (_e, tabId: string, cols: number, rows: number) =>
