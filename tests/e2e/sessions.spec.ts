@@ -1,5 +1,5 @@
 import { type ElectronApplication, expect, type Locator, type Page, test } from '@playwright/test'
-import { launch, probeText, readLog, typeInto } from './launch'
+import { gitFolder, launch, probeText, readLog, typeInto } from './launch'
 
 function groupWith(page: Page, title: string): Locator {
   return page.locator('.dv-groupview', { has: page.locator('.dv-tab', { hasText: title }) })
@@ -178,4 +178,92 @@ test('a saved layout with Claude 2 opens it again', async () => {
   } finally {
     await second.app.close()
   }
+})
+
+const header = (page: Page) => page.locator('[data-tab="changes"] .bp-changes-session')
+const row = (page: Page, path: string) => page.locator(`[data-tab="changes"] [data-path="${path}"]`)
+
+async function twoSessions(): Promise<Awaited<ReturnType<typeof launch>>> {
+  const run = await launch({ folder: gitFolder() })
+  await expect.poll(() => probeText(run.page, 'claude-1')).toContain('claude ready')
+  await openSession(run.page, 'Claude', 'claude-2')
+  await expect.poll(() => probeText(run.page, 'claude-2')).toContain('claude ready')
+  await expect(run.page.locator('[data-tab="claude-2"]')).toHaveAttribute('data-status', 'idle')
+  return run
+}
+
+async function focusClaude(page: Page, title: string): Promise<void> {
+  const target = page.locator('.dv-tab', { hasText: new RegExp(`^\\s*⚠?\\s*${title}\\s*$`) })
+  await target.click()
+  await expect(target).toHaveClass(/dv-active-tab/)
+}
+
+/** Brings a session's tab forward, then types into it. */
+async function typeIn(page: Page, log: string, title: string, tabId: string, text: string): Promise<void> {
+  const hooks = tabId === 'claude-1' ? 'claude.hooks' : `claude${tabId.slice(7)}.hooks`
+  const stops = () =>
+    readLog(log, hooks)
+      .split('\n')
+      .filter((l) => l.startsWith('Stop')).length
+  const before = stops()
+  await focusClaude(page, title)
+  await expect(page.locator(`[data-tab="${tabId}"]`)).toBeVisible()
+  await typeInto(page, tabId, text)
+  await expect.poll(stops).toBe(before + 1)
+}
+
+test('each file is tagged with its own session', async () => {
+  const { app, page, log } = await twoSessions()
+  await typeIn(page, log, 'Claude', 'claude-1', 'pws')
+  await typeIn(page, log, 'Claude 2', 'claude-2', 'pws')
+  await focusClaude(page, 'Claude')
+  await page.getByRole('button', { name: 'This session' }).click()
+  await expect(row(page, 'claude-1.txt').getByRole('img', { name: 'Claude', exact: true })).toBeVisible()
+  await expect(row(page, 'claude2-1.txt').getByRole('img', { name: 'Claude 2', exact: true })).toBeVisible()
+  await app.close()
+})
+
+test('both tabs warn when two sessions change the same file', async () => {
+  const { app, page, log } = await twoSessions()
+  await typeIn(page, log, 'Claude', 'claude-1', 'pes')
+  await typeIn(page, log, 'Claude 2', 'claude-2', 'pes')
+  const mark1 = tab(page, 'Claude 2').getByRole('img', { name: 'Overlap with Claude', exact: true })
+  const mark2 = page.locator('.dv-tab').getByRole('img', { name: 'Overlap with Claude 2', exact: true })
+  await expect(mark1).toHaveAttribute('title', /notes\.txt/)
+  await expect(mark2).toHaveAttribute('title', /notes\.txt/)
+  await app.close()
+})
+
+test('the Changes pane follows the session focused last', async () => {
+  const { app, page } = await twoSessions()
+  await focusClaude(page, 'Claude')
+  await expect(header(page)).toHaveText('Claude')
+  await focusClaude(page, 'Claude 2')
+  await expect(header(page)).toHaveText('Claude 2')
+  await app.close()
+})
+
+test('closing the shown session moves the Changes pane to another', async () => {
+  const { app, page } = await twoSessions()
+  await focusClaude(page, 'Claude 2')
+  await expect(header(page)).toHaveText('Claude 2')
+  await closeAction(page, 'Claude 2').click()
+  await expect(tab(page, 'Claude 2')).toHaveCount(0)
+  await expect(header(page)).toHaveText('Claude')
+  await app.close()
+})
+
+test("a closed session's Changes keep its name", async () => {
+  const { app, page, log } = await twoSessions()
+  await typeIn(page, log, 'Claude 2', 'claude-2', 'pws')
+  await typeIn(page, log, 'Claude', 'claude-1', 'pes')
+  await typeIn(page, log, 'Claude 2', 'claude-2', 'pes')
+  await expect(tab(page, 'Claude 2').getByRole('img', { name: /^Overlap/ })).toBeVisible()
+  await focusClaude(page, 'Claude 2')
+  await closeAction(page, 'Claude 2').click()
+  await expect(tab(page, 'Claude 2')).toHaveCount(0)
+  await page.getByRole('button', { name: 'This session' }).click()
+  await expect(row(page, 'claude2-1.txt').getByRole('img', { name: 'Claude 2', exact: true })).toBeVisible()
+  await expect(page.locator('.dv-tab').getByRole('img', { name: /^Overlap/ })).toHaveCount(0)
+  await app.close()
 })

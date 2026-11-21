@@ -143,6 +143,14 @@
   gap: 4px;
   margin-bottom: 6px;
 }
+.bp-changes-session {
+  align-self: center;
+  margin-right: 4px;
+  font: 600 9.5px var(--bp-font-ui);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--bp-head);
+}
 .bp-changes-head button {
   padding: 2px 8px;
   border: 1px solid var(--bp-line-faint);
@@ -177,6 +185,17 @@
 }
 .bp-mark-claude {
   color: var(--bp-agent);
+}
+.bp-change-by {
+  font-size: 0.85em;
+  color: var(--bp-muted);
+}
+.bp-overlap {
+  flex: none;
+  margin-right: 6px;
+  font-size: 10px;
+  line-height: 1;
+  color: var(--bp-del);
 }
 .bp-mark-outside {
   color: var(--bp-muted);

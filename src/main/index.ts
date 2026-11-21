@@ -76,7 +76,7 @@ void app.whenReady().then(async () => {
     review = new ReviewService(
       reviewDir.dir,
       (state) => send('review:update', state),
-      () => {},
+      (overlaps) => send('review:overlaps', overlaps),
     )
     // Waits only for the review store to open, at most 8 seconds. The first snapshot runs in the background,
     // so a slow Git does not hold back the window.

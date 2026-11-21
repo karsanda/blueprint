@@ -104,6 +104,8 @@ export interface BlueprintApi {
   onFocusTab(cb: (tabId: string) => void): () => void
   /** Every state the review reaches, as the Changes pane should show it. */
   onReviewUpdate(cb: (state: ReviewState) => void): () => void
+  /** Which open sessions changed the same files, pushed whenever it changes. */
+  onOverlaps(cb: (overlaps: Overlap[]) => void): () => void
   /** Tells main which range the Changes pane shows and whether the Developer can see it. */
   setReviewView(view: ReviewView): void
   /** The difference of one Change, by its path relative to the Folder. */

@@ -9,6 +9,9 @@ import {
 } from 'dockview-react'
 import { useEffect, useState } from 'react'
 import { ChangesPanel } from '../review/ChangesPanel'
+import { useShallow } from 'zustand/react/shallow'
+import { useReview } from '../review/store'
+import { installReviewFollow } from '../review/install'
 import { DifferencePanel } from '../review/DifferencePanel'
 import { StatusLight } from '../status/StatusLight'
 import { installNotifications } from '../status/notify'
@@ -41,6 +44,25 @@ function useClaudeTabCount(api: DockviewApi): number {
   return n
 }
 
+/** The mark on a tab whose session changed files that another open session changed too. */
+function OverlapMark({ tabId }: { tabId: string }) {
+  const overlap = useReview((s) => s.overlaps.find((o) => o.tabId === tabId))
+  const names = useReview(useShallow((s) => (overlap?.others ?? []).map((id) => s.names[id] ?? id))).join(
+    ', ',
+  )
+  if (!overlap) return null
+  return (
+    <span
+      role="img"
+      aria-label={`Overlap with ${names}`}
+      title={`Also changed by ${names}: ${overlap.paths.join(', ')}`}
+      className="bp-overlap"
+    >
+      ⚠
+    </span>
+  )
+}
+
 /**
  * A Claude tab has a close action (button and middle-click) while another Claude tab is open;
  * no other tab has one, and the last Claude tab stays.
@@ -51,6 +73,7 @@ function BlueprintTab(props: IDockviewPanelHeaderProps) {
   return (
     <div className="bp-tab">
       <StatusLight tabId={props.api.id} />
+      <OverlapMark tabId={props.api.id} />
       <DockviewDefaultTab
         {...props}
         hideClose={!closable}
@@ -82,6 +105,7 @@ export function Workspace() {
             }
             installLayoutSaving(e.api)
             installTitle(e.api)
+            installReviewFollow(e.api)
             installNotifications(e.api)
           })()
         }}
