@@ -14,11 +14,12 @@ export function ChangesPanel({ api, containerApi }: IDockviewPanelProps) {
   const range = useReview((s) => s.range)
   const visible = useVisible(api)
   useEffect(() => {
-    window.blueprint.setReviewView({ range, visible })
+    window.blueprint.setReviewView({ range, visible, tabId: null })
   }, [range, visible])
   // A pane that goes away is no longer visible, whatever it last reported.
   useEffect(
-    () => () => window.blueprint.setReviewView({ range: useReview.getState().range, visible: false }),
+    () => () =>
+      window.blueprint.setReviewView({ range: useReview.getState().range, visible: false, tabId: null }),
     [],
   )
 
@@ -61,13 +62,18 @@ export function ChangesPanel({ api, containerApi }: IDockviewPanelProps) {
 function ChangeRow({ change: c, onPick }: { change: Change; onPick: () => void }) {
   const picked = useReview((s) => s.picked === c.path)
   return (
-    <li data-path={c.path} data-by={c.byClaude ? 'claude' : 'outside'} data-picked={picked} onClick={onPick}>
+    <li
+      data-path={c.path}
+      data-by={c.by.length > 0 ? 'claude' : 'outside'}
+      data-picked={picked}
+      onClick={onPick}
+    >
       <span
         role="img"
-        aria-label={c.byClaude ? 'Claude' : 'Changed outside Claude'}
-        className={c.byClaude ? 'bp-mark-claude' : 'bp-mark-outside'}
+        aria-label={c.by.length > 0 ? 'Claude' : 'Changed outside Claude'}
+        className={c.by.length > 0 ? 'bp-mark-claude' : 'bp-mark-outside'}
       >
-        {c.byClaude ? '●' : '○'}
+        {c.by.length > 0 ? '●' : '○'}
       </span>
       <span className="bp-change-kind" data-kind={c.kind}>
         {LETTER[c.kind]}

@@ -3,7 +3,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Change } from '../../shared/api'
 
-export type GitChange = Omit<Change, 'byClaude'>
+export type GitChange = Omit<Change, 'by'>
 export type GitProblem = 'no-git' | 'not-a-repo'
 
 const KINDS: Record<string, GitChange['kind']> = { A: 'added', D: 'deleted', M: 'modified', T: 'modified' }

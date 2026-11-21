@@ -73,7 +73,11 @@ void app.whenReady().then(async () => {
   let hookDir: ReturnType<typeof createHookDir> | undefined
   try {
     reviewDir = createReviewDir(app.getPath('userData'))
-    review = new ReviewService(reviewDir.dir, (state) => send('review:update', state))
+    review = new ReviewService(
+      reviewDir.dir,
+      (state) => send('review:update', state),
+      () => {},
+    )
     // Waits only for the review store to open, at most 8 seconds. The first snapshot runs in the background,
     // so a slow Git does not hold back the window.
     await review.setFolder(folder.folder)

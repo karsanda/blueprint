@@ -5,7 +5,9 @@ import { useReview } from './store'
 const listed = (range: ReviewRange, path: string): ReviewState => ({
   kind: 'changes',
   range,
-  changes: [{ path, id: 'a'.repeat(40), kind: 'added', added: 1, removed: 0, binary: false, byClaude: true }],
+  changes: [
+    { path, id: 'a'.repeat(40), kind: 'added', added: 1, removed: 0, binary: false, by: ['claude-1'] },
+  ],
 })
 
 describe('useReview', () => {

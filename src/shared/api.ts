@@ -51,6 +51,8 @@ export type ReviewRange = 'turn' | 'session'
 export interface ReviewView {
   range: ReviewRange
   visible: boolean
+  /** The Claude tab the Changes pane shows. */
+  tabId: string | null
 }
 /** A Change as the review lists it. The path is relative to the Folder, with `/`. Counts are 0 for a binary file. */
 export interface Change {
@@ -61,7 +63,15 @@ export interface Change {
   added: number
   removed: number
   binary: boolean
-  byClaude: boolean
+  /** Tab ids of the Claude sessions that made it, in the order they first touched it. Empty: changed outside Claude. */
+  by: string[]
+}
+/** Two or more open sessions touched the same paths. */
+export interface Overlap {
+  tabId: string
+  /** Tab ids. */
+  others: string[]
+  paths: string[]
 }
 export type ReviewState =
   | { kind: 'no-git'; message: string }

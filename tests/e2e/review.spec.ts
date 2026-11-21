@@ -6,7 +6,7 @@ import { dropTab, gitFolder, lastReview, launch, probeText, readLog, typeInto, w
 
 function paths(state: ReviewState | undefined): [string, boolean][] | undefined {
   return state?.kind === 'changes'
-    ? state.changes.map((c): [string, boolean] => [c.path, c.byClaude])
+    ? state.changes.map((c): [string, boolean] => [c.path, c.by.length > 0])
     : undefined
 }
 

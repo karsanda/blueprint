@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { realpathSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import type { Change, FileDiff, ReviewState, ReviewView } from '../../shared/api'
+import type { Change, FileDiff, Overlap, ReviewState, ReviewView } from '../../shared/api'
 import type { HookInput } from '../status/hooks'
 import { isClaudeCodesOwnPrompt, pathInFolder, TouchLog } from './attribution'
 import { GitTimeout, SnapshotStore, type GitProblem } from './git'
@@ -58,7 +58,9 @@ interface Session {
   tabId: string
   base?: Base
   turnBase?: Base
-  touches: TouchLog
+  /** The touch log's mark at the session's start, and at its latest Developer prompt. */
+  start: number
+  prompted: number
   /** Snapshots taken before each Bash command, by tool_use_id. They may still be running. */
   before: Map<string, Promise<string>>
 }
@@ -80,9 +82,13 @@ export class ReviewService {
   private folderReal: string | undefined
   private opening: Promise<void> = Promise.resolve()
   private readonly sessions = new Map<string, Session>()
+  /** The newest start. The shown session when the view's tab has none. */
   private shownKey: string | undefined
+  /** Every touch in the Folder, by every session, including ended ones. */
+  private log = new TouchLog()
+  private lastOverlaps = '[]'
   private latest: string | undefined
-  private view: ReviewView = { range: 'turn', visible: false }
+  private view: ReviewView = { range: 'turn', visible: false, tabId: null }
   private poll: ReturnType<typeof setInterval> | undefined
   private lastSent: string | undefined
   private generation = 0
@@ -97,6 +103,7 @@ export class ReviewService {
   constructor(
     private readonly runDir: string,
     private readonly send: (state: ReviewState) => void,
+    private readonly sendOverlaps: (overlaps: Overlap[]) => void,
     opts: { pollMs?: number; git?: string; waitMs?: number; timeoutMs?: number; openTimeoutMs?: number } = {},
   ) {
     this.pollMs = opts.pollMs ?? 2000
@@ -125,6 +132,8 @@ export class ReviewService {
     this.latest = undefined
     this.sessions.clear()
     this.shownKey = undefined
+    this.log = new TouchLog()
+    this.sendOverlapsIfChanged()
     await this.openStore()
     // A slow Git holds back neither the window nor Claude's start.
     this.background(() => this.refresh())
@@ -194,11 +203,13 @@ export class ReviewService {
     const session: Session = {
       tabId,
       base: this.takeBase(),
-      touches: new TouchLog(),
+      start: this.log.mark(),
+      prompted: this.log.mark(),
       before: new Map(),
     }
     this.sessions.set(startKey, session)
     this.shownKey = startKey
+    this.sendOverlapsIfChanged()
     return session.base?.done
   }
 
@@ -213,7 +224,7 @@ export class ReviewService {
         if (e.prompt !== undefined && isClaudeCodesOwnPrompt(e.prompt)) return
         // The turn starts now: what Claude touches while its base is read belongs to it. A base that lands
         // after a newer prompt is dropped with this one.
-        session.touches.startTurn()
+        session.prompted = this.log.mark()
         const turnBase = this.takeBase()
         session.turnBase = turnBase
         if (turnBase) await this.hold(turnBase.done, 'take the turn base', true)
@@ -228,7 +239,7 @@ export class ReviewService {
         (e.hook_event_name === 'PostToolUseFailure' && e.tool_name === 'Bash')
       ) {
         if (e.tool_name && EDIT_TOOLS.has(e.tool_name) && e.file_path) {
-          for (const path of editedPaths(folder, folderReal, e.file_path)) session.touches.touch(path)
+          for (const path of editedPaths(folder, folderReal, e.file_path)) this.touch(path, session.tabId)
         }
         const before = e.tool_use_id ? session.before.get(e.tool_use_id) : undefined
         if (e.tool_name === 'Bash' && e.tool_use_id) session.before.delete(e.tool_use_id)
@@ -238,7 +249,7 @@ export class ReviewService {
           try {
             if (store && before && after) {
               const [from, to] = await Promise.all([before, after])
-              for (const change of await store.changes(from, to)) session.touches.touch(change.path)
+              for (const change of await store.changes(from, to)) this.touch(change.path, session.tabId)
             }
           } finally {
             await this.refresh()
@@ -250,6 +261,46 @@ export class ReviewService {
     } catch (error) {
       this.warn('handle a hook', error)
     }
+  }
+
+  /** Drops the tab's session. Its touches stay in the log. */
+  endSession(tabId: string): void {
+    for (const [key, session] of this.sessions) {
+      if (session.tabId === tabId) this.sessions.delete(key)
+    }
+    if (this.shownKey !== undefined && !this.sessions.has(this.shownKey)) {
+      this.shownKey = [...this.sessions.keys()].pop()
+    }
+    this.sendOverlapsIfChanged()
+    this.background(() => this.refresh(true))
+  }
+
+  private touch(path: string, tabId: string): void {
+    this.log.touch(path, tabId)
+    this.sendOverlapsIfChanged()
+  }
+
+  private sendOverlapsIfChanged(): void {
+    const open = [...this.sessions.values()].map((s) => ({ tabId: s.tabId, since: s.start }))
+    const overlaps = this.log.overlaps(open)
+    const text = JSON.stringify(overlaps)
+    if (text === this.lastOverlaps) return
+    this.lastOverlaps = text
+    this.sendOverlaps(overlaps)
+  }
+
+  /** The session the view's tab runs, or else the newest start. */
+  private shown(): Session | undefined {
+    const tabId = this.view.tabId
+    if (tabId !== null) {
+      for (const session of this.sessions.values()) if (session.tabId === tabId) return session
+    }
+    return this.shownKey ? this.sessions.get(this.shownKey) : undefined
+  }
+
+  /** Where the shown range starts in the touch log. */
+  private rangeStart(session: Session): number {
+    return this.view.range === 'turn' ? session.prompted : session.start
   }
 
   setView(view: ReviewView): void {
@@ -294,7 +345,7 @@ export class ReviewService {
 
   async diff(path: string): Promise<FileDiff> {
     try {
-      const session = this.shownKey ? this.sessions.get(this.shownKey) : undefined
+      const session = this.shown()
       const base = session && this.baseOf(session)?.tree
       const latest = this.latest
       if (!this.store || !session || !base || !latest) return { kind: 'none' }
@@ -305,7 +356,7 @@ export class ReviewService {
       return {
         kind: 'text',
         patch,
-        byClaude: session.touches.touched(path, this.view.range),
+        byClaude: this.log.by(path, this.rangeStart(session)).length > 0,
       }
     } catch (error) {
       this.warn('read a difference', error)
@@ -325,7 +376,7 @@ export class ReviewService {
 
   /** Whether the shown range's base is still being read. */
   private reading(): boolean {
-    const session = this.shownKey ? this.sessions.get(this.shownKey) : undefined
+    const session = this.shown()
     const base = session && this.baseOf(session)
     return base !== undefined && !base.failed && base.tree === undefined
   }
@@ -403,7 +454,7 @@ export class ReviewService {
   private async build(tree: string | undefined): Promise<ReviewState> {
     if (this.problem) return { kind: 'no-git', message: NO_GIT_MESSAGES[this.problem] }
     if (this.unopened) return { kind: 'waiting', message: GIT_FAILED }
-    const session = this.shownKey ? this.sessions.get(this.shownKey) : undefined
+    const session = this.shown()
     if (!this.store || !session || !session.base) return { kind: 'waiting', message: NOT_STARTED }
     const { range } = this.view
     const base = this.baseOf(session)
@@ -413,7 +464,7 @@ export class ReviewService {
     if (!tree) return { kind: 'waiting', message: NOT_STARTED }
     const changes: Change[] = (await this.store.changes(base.tree, tree)).map((c) => ({
       ...c,
-      byClaude: session.touches.touched(c.path, range),
+      by: this.log.by(c.path, this.rangeStart(session)),
     }))
     return { kind: 'changes', range, changes }
   }

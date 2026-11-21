@@ -1,5 +1,5 @@
 import { isAbsolute, relative, resolve, sep } from 'node:path'
-import type { ReviewRange } from '../../shared/api'
+import type { Overlap } from '../../shared/api'
 
 /** Claude Code sends these as prompts when a background command ends or a subagent hands back. They do not start a turn. */
 export function isClaudeCodesOwnPrompt(prompt: string): boolean {
@@ -13,22 +13,48 @@ export function pathInFolder(folder: string, file: string): string | null {
   return rel.split(sep).join('/')
 }
 
-/** Which paths Claude touched: in the current turn, and at any time in the session. */
+/** Every path a Claude session touched in the Folder, each with the next sequence number. */
 export class TouchLog {
-  private turn = 0
-  private readonly last = new Map<string, number>()
+  private seq = 0
+  private readonly touches: { path: string; tabId: string; seq: number }[] = []
 
-  startTurn(): void {
-    this.turn += 1
+  touch(path: string, tabId: string): void {
+    this.touches.push({ path, tabId, seq: ++this.seq })
   }
 
-  touch(path: string): void {
-    this.last.set(path, this.turn)
+  /** The current sequence number. A range starts from it. */
+  mark(): number {
+    return this.seq
   }
 
-  touched(path: string, range: ReviewRange): boolean {
-    const at = this.last.get(path)
-    if (at === undefined) return false
-    return range === 'session' || at === this.turn
+  /** The tabs that touched the path after `since`, in first-touch order. */
+  by(path: string, since: number): string[] {
+    const tabs: string[] = []
+    for (const t of this.touches) {
+      if (t.path === path && t.seq > since && !tabs.includes(t.tabId)) tabs.push(t.tabId)
+    }
+    return tabs
+  }
+
+  /** Each open session with the sessions that touched the same paths, after each one's own `since`. */
+  overlaps(open: { tabId: string; since: number }[]): Overlap[] {
+    const touched = open.map(({ tabId, since }) => ({
+      tabId,
+      paths: new Set(this.touches.filter((t) => t.tabId === tabId && t.seq > since).map((t) => t.path)),
+    }))
+    const result: Overlap[] = []
+    for (const a of touched) {
+      const others: string[] = []
+      const paths = new Set<string>()
+      for (const b of touched) {
+        if (b.tabId === a.tabId) continue
+        const shared = [...a.paths].filter((p) => b.paths.has(p))
+        if (shared.length === 0) continue
+        others.push(b.tabId)
+        for (const p of shared) paths.add(p)
+      }
+      if (others.length > 0) result.push({ tabId: a.tabId, others, paths: [...paths].toSorted() })
+    }
+    return result
   }
 }

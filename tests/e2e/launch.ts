@@ -143,7 +143,7 @@ export async function watchReview(page: Page): Promise<void> {
   await page.evaluate(() => {
     window.reviewStates = []
     window.blueprint.onReviewUpdate((state) => window.reviewStates?.push(state))
-    window.blueprint.setReviewView({ range: 'turn', visible: true })
+    window.blueprint.setReviewView({ range: 'turn', visible: true, tabId: null })
   })
 }
 
