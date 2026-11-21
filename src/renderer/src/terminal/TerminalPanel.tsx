@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react'
 import type { SavedConversation, TerminalKind } from '../../../shared/api'
 import { STATUS_LABEL } from '../status/labels'
 import { useClaudeStatus } from '../status/store'
-import { findSession, getSession } from './session'
+import { findSession, getSession, type TerminalSession } from './session'
 import { useTerminalStatus } from './status'
 import { TerminalNotice } from './TerminalNotice'
 
@@ -17,12 +17,14 @@ export function TerminalPanel({ api, params }: IDockviewPanelProps<TerminalParam
   const host = useRef<HTMLDivElement>(null)
   const status = useTerminalStatus((s) => s.tabs[api.id])
   const claude = useClaudeStatus((s) => s.tabs[api.id])
-  const cols = useCols(api.id, params.kind, params.conversation)
+  // The first render creates the session with its conversation, before it attaches.
+  const session = getSession(api.id, params.kind, params.conversation)
+  const cols = useCols(session)
   useEffect(() => {
-    // The render above created the session with its conversation.
-    const session = getSession(api.id, params.kind)
     if (host.current) session.attach(host.current)
     return () => session.detach()
+    // The session is the one for this tab and kind, so those are what re-attach it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api.id, params.kind])
 
   // A tab the Developer clicks puts the keyboard in its terminal once its pane is visible, which is
@@ -72,7 +74,7 @@ export function TerminalPanel({ api, params }: IDockviewPanelProps<TerminalParam
         <TerminalNotice
           kind={params.kind}
           status={status}
-          onRestart={() => void getSession(api.id, params.kind).restart()}
+          onRestart={() => void session.restart()}
           onDismiss={() => useTerminalStatus.getState().set(api.id, { state: 'running' })}
         />
       )}
@@ -81,9 +83,7 @@ export function TerminalPanel({ api, params }: IDockviewPanelProps<TerminalParam
 }
 
 /** The terminal's width in columns, kept current as the pane resizes. */
-function useCols(tabId: string, kind: TerminalKind, conversation?: SavedConversation): number {
-  // The first render creates the session, so it is the one that must know the conversation.
-  const session = getSession(tabId, kind, conversation)
+function useCols(session: TerminalSession): number {
   const subscribe = useCallback(
     (onChange: () => void) => {
       const sub = session.term.onResize(onChange)

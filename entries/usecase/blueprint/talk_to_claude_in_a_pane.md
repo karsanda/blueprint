@@ -31,7 +31,7 @@ At any step, Claude Code exits. System keeps the conversation on screen and offe
 
 ## Alternative Flow 3: Resume after reopening
 
-At step 2, the Folder had a Claude session when Blueprint closed. System resumes that conversation instead of starting a new one.
+At step 2, the Folder had a Claude session when Blueprint closed. System resumes that conversation instead of starting a new one. If System cannot find that conversation, System starts a new one and says so.
 
 ## Alternative Flow 4: The pane changes size
 

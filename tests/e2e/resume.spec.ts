@@ -1,5 +1,5 @@
 import { readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { expect, type Page, test } from '@playwright/test'
 import { layoutFile } from '../../src/main/layout/store'
 import { launch, type Launched, probeText, readLog, typeInto } from './launch'
@@ -90,7 +90,11 @@ test('a saved id that is not a session id never reaches Claude Code', async () =
   await prompt(first.page, first.log, 'claude-1', 'claude')
   const { layout } = await close(first)
   const saved = JSON.parse(readFileSync(layout, 'utf8'))
-  saved.dockview.panels['claude-1'].params.conversation.sessionId = '--dangerously-skip-permissions'
+  const conversation = saved.dockview.panels['claude-1'].params.conversation
+  // Its file name is `<sessionId>.jsonl` and the file exists, so only the UUID rule can stop it.
+  conversation.sessionId = '--dangerously-skip-permissions'
+  conversation.transcript = join(dirname(conversation.transcript), '--dangerously-skip-permissions.jsonl')
+  writeFileSync(conversation.transcript, '')
   writeFileSync(layout, JSON.stringify(saved))
   const second = await relaunch(first)
   try {
@@ -152,6 +156,31 @@ test('after /clear the newer conversation is the one resumed', async () => {
   const second = await relaunch(first)
   try {
     await expect.poll(() => probeText(second.page, 'claude-1')).toContain(`resumed ${id}`)
+  } finally {
+    await second.app.close()
+  }
+})
+
+test('a session that failed to start resumes its conversation on Restart', async () => {
+  const first = await launch()
+  await prompt(first.page, first.log, 'claude-1', 'claude')
+  const id = sessionOf(first.log, 'claude')
+  await close(first)
+  const second = await launch({ folder: first.folder, home: first.home, path: 'no-claude' })
+  try {
+    await expect(second.page.getByRole('button', { name: 'Restart' })).toBeVisible()
+    // Claude Code becomes findable again in the running app, as if the Developer had installed it.
+    await second.app.evaluate(
+      (_electron, dir) => {
+        process.env['PATH'] = `${dir}:${process.env['PATH'] ?? ''}`
+      },
+      resolve(__dirname, 'fixtures/bin'),
+    )
+    await second.page.getByRole('button', { name: 'Restart' }).click()
+    await expect.poll(() => probeText(second.page, 'claude-1')).toContain(`resumed ${id}`)
+    const args = startArgs(second.log, 'claude')
+    expect(args).toContain('--resume')
+    expect(args[args.indexOf('--resume') + 1]).toBe(id)
   } finally {
     await second.app.close()
   }

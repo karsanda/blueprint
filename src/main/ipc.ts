@@ -127,8 +127,14 @@ async function startTerminal(deps: IpcDeps, req: StartRequest): Promise<StartRes
   }
   try {
     const pid = deps.manager.start(req.tabId, spec, req.cols, req.rows)
-    if (req.kind === 'claude') deps.sendConversation(req.tabId, resume ?? null)
-    return req.resume === undefined ? { ok: true, pid } : { ok: true, pid, resumed: resume !== undefined }
+    if (req.kind === 'claude')
+      deps.sendConversation(
+        req.tabId,
+        resume ? { sessionId: resume.sessionId, transcript: resume.transcript } : null,
+      )
+    return req.kind === 'claude' && req.resume !== undefined
+      ? { ok: true, pid, resumed: resume !== undefined }
+      : { ok: true, pid }
   } catch (err) {
     return {
       ok: false,

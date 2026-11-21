@@ -125,8 +125,8 @@ export class TerminalSession {
     if (this.kind === 'claude') useClaudeStatus.getState().set(this.tabId, undefined)
     this.fitToHost()
     const { cols, rows } = this.term
+    // The conversation stays until a start succeeds, so Restart after a failed first start still resumes it.
     const resume = this.resume
-    this.resume = undefined
     const result = await window.blueprint.startTerminal({
       tabId: this.tabId,
       kind: this.kind,
@@ -140,6 +140,7 @@ export class TerminalSession {
       status.set(this.tabId, { state: 'failed', failure: result.failure })
       return
     }
+    this.resume = undefined
     status.set(
       this.tabId,
       resume && result.resumed === false
