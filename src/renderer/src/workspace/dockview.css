@@ -298,3 +298,13 @@
 .bp-diff-row[data-kind='del'] .bp-diff-sign {
   color: var(--bp-del);
 }
+.bp-tab-name {
+  width: 12ch;
+  padding: 0 4px;
+  font: inherit;
+  color: inherit;
+  background: var(--bp-bg, transparent);
+  border: 1px solid var(--bp-muted);
+  border-radius: 3px;
+  outline: none;
+}

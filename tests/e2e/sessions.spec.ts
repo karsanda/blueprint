@@ -267,3 +267,75 @@ test("a closed session's Changes keep its name", async () => {
   await expect(page.locator('.dv-tab').getByRole('img', { name: /^Overlap/ })).toHaveCount(0)
   await app.close()
 })
+
+async function rename(page: Page, from: string, to: string): Promise<void> {
+  await tab(page, from).locator('.dv-default-tab-content, .bp-tab-name').first().dblclick()
+  const field = page.getByRole('textbox', { name: 'Session name' })
+  await expect(field).toBeFocused()
+  await page.keyboard.press('Control+A')
+  await page.keyboard.type(to)
+  await page.keyboard.press('Enter')
+  await expect(field).toHaveCount(0)
+}
+
+test("a renamed session's Change shows the new name", async () => {
+  const { app, page } = await launch({ folder: gitFolder() })
+  await expect.poll(() => probeText(page, 'claude-1')).toContain('claude ready')
+  await rename(page, 'Claude', 'api retries')
+  await expect(tab(page, 'api retries')).toBeVisible()
+  await typeInto(page, 'claude-1', 'pw')
+  await expect(row(page, 'claude-1.txt').getByRole('img', { name: 'api retries', exact: true })).toBeVisible()
+  await expect(header(page)).toHaveText('api retries')
+  await app.close()
+})
+
+test('the new name shows in the window title', async () => {
+  const { app, page } = await launch()
+  await expect.poll(() => probeText(page, 'claude-1')).toContain('claude ready')
+  await stubUnfocused(app)
+  await rename(page, 'Claude', 'api retries')
+  await typeInto(page, 'claude-1', 'p?')
+  await expect.poll(() => page.title()).toBe('Needs you: api retries — Blueprint')
+  await rename(page, 'api retries', 'docs')
+  await expect.poll(() => page.title()).toBe('Needs you: docs — Blueprint')
+  await app.close()
+})
+
+test('Escape and an empty name keep the old name', async () => {
+  const { app, page } = await launch()
+  await expect.poll(() => probeText(page, 'claude-1')).toContain('claude ready')
+  const field = page.getByRole('textbox', { name: 'Session name' })
+  await tab(page, 'Claude').locator('.dv-default-tab-content, .bp-tab-name').first().dblclick()
+  await page.keyboard.press('Control+A')
+  await page.keyboard.type('nope')
+  await page.keyboard.press('Escape')
+  await expect(field).toHaveCount(0)
+  await expect(tab(page, 'Claude')).toBeVisible()
+  await expect(tab(page, 'nope')).toHaveCount(0)
+
+  await tab(page, 'Claude').locator('.dv-default-tab-content, .bp-tab-name').first().dblclick()
+  await page.keyboard.press('Control+A')
+  await page.keyboard.press('Backspace')
+  await page.keyboard.press('Enter')
+  await expect(field).toHaveCount(0)
+  await expect(tab(page, 'Claude')).toBeVisible()
+  await expect(header(page)).toHaveText('Claude')
+  await app.close()
+})
+
+test('a renamed session keeps its name after reopening', async () => {
+  const first = await launch()
+  await expect.poll(() => probeText(first.page, 'claude-1')).toContain('claude ready')
+  await openSession(first.page, 'Claude', 'claude-2')
+  await rename(first.page, 'Claude 2', 'docs')
+  await first.page.waitForTimeout(1000)
+  await first.app.close()
+
+  const second = await launch({ folder: first.folder, home: first.home })
+  try {
+    await expect(tab(second.page, 'docs')).toBeVisible()
+    await expect.poll(() => probeText(second.page, 'claude-2')).toContain('claude ready')
+  } finally {
+    await second.app.close()
+  }
+})

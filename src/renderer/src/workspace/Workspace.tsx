@@ -7,7 +7,7 @@ import {
   type DockviewTheme,
   type IDockviewPanelHeaderProps,
 } from 'dockview-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ChangesPanel } from '../review/ChangesPanel'
 import { useShallow } from 'zustand/react/shallow'
 import { useReview } from '../review/store'
@@ -63,22 +63,60 @@ function OverlapMark({ tabId }: { tabId: string }) {
   )
 }
 
+/** The name field a double-click opens in place of a Claude tab's title. */
+function NameField({ name, onDone }: { name: string; onDone: (name: string | null) => void }) {
+  const done = useRef(false)
+  const finish = (value: string | null) => {
+    if (done.current) return
+    done.current = true
+    onDone(value)
+  }
+  return (
+    <input
+      className="bp-tab-name"
+      aria-label="Session name"
+      defaultValue={name}
+      // oxlint-disable-next-line jsx-a11y/no-autofocus -- the field opens on a double-click
+      autoFocus
+      onFocus={(e) => e.currentTarget.select()}
+      onPointerDown={(e) => e.stopPropagation()}
+      onKeyDown={(e) => {
+        e.stopPropagation()
+        if (e.key === 'Enter') finish(e.currentTarget.value)
+        else if (e.key === 'Escape') finish(null)
+      }}
+      onBlur={(e) => finish(e.currentTarget.value)}
+    />
+  )
+}
+
 /**
  * A Claude tab has a close action (button and middle-click) while another Claude tab is open;
- * no other tab has one, and the last Claude tab stays.
+ * no other tab has one, and the last Claude tab stays. Double-clicking a Claude tab's title renames it.
  */
 function BlueprintTab(props: IDockviewPanelHeaderProps) {
   const claudeTabs = useClaudeTabCount(props.containerApi)
-  const closable = isClaudeTab(props.api.id) && claudeTabs > 1
+  const isClaude = isClaudeTab(props.api.id)
+  const closable = isClaude && claudeTabs > 1
+  const [editing, setEditing] = useState(false)
+  const rename = (value: string | null) => {
+    setEditing(false)
+    const name = value?.trim()
+    if (name) props.api.setTitle(name)
+  }
   return (
-    <div className="bp-tab">
+    <div className="bp-tab" onDoubleClick={isClaude ? () => setEditing(true) : undefined}>
       <StatusLight tabId={props.api.id} />
       <OverlapMark tabId={props.api.id} />
-      <DockviewDefaultTab
-        {...props}
-        hideClose={!closable}
-        closeActionOverride={() => requestClose(props.containerApi, props.api.id)}
-      />
+      {editing ? (
+        <NameField name={props.api.title ?? props.api.id} onDone={rename} />
+      ) : (
+        <DockviewDefaultTab
+          {...props}
+          hideClose={!closable}
+          closeActionOverride={() => requestClose(props.containerApi, props.api.id)}
+        />
+      )}
     </div>
   )
 }
