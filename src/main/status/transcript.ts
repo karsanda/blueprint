@@ -4,6 +4,8 @@ const INTERRUPT_PREFIX = '[Request interrupted by user'
 
 /** True for the transcript line Claude Code appends when the Developer refuses a tool or presses Esc. */
 export function isInterruptLine(line: string): boolean {
+  // Most lines are large tool results: skip them without parsing.
+  if (!line.includes(INTERRUPT_PREFIX)) return false
   let row: unknown
   try {
     row = JSON.parse(line)

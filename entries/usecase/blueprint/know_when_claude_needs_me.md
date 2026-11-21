@@ -61,6 +61,7 @@ Test cases:
 ## Known gaps
 
 - Claude Code sometimes asks a question in plain text. That ends its turn, so the session shows as idle, not Needs you.
+- Claude Code may first ask the Developer to trust the Folder or to sign in. The session shows as idle meanwhile.
 
 ## Resources
 

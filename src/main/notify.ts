@@ -23,6 +23,7 @@ export class NeedsYouNotifier {
       this.win.focus()
       this.focusTab(tabId)
     })
+    this.shown.get(tabId)?.close()
     this.shown.set(tabId, notification)
     notification.show()
   }

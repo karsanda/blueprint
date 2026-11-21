@@ -9,7 +9,7 @@ Code-level detail for [Talk to Claude in a pane](../../usecase/blueprint/talk_to
 ## Running Claude Code
 
 - Each Claude session is the real `claude` CLI in a pseudo-terminal (node-pty), drawn with xterm.js and its WebGL renderer, with the ligatures add-on loaded before WebGL.
-- Blueprint passes `--session-id <uuid>` so every hook event names its session, and `--settings <file>` to add its hooks.
+- Blueprint passes `--session-id <uuid>` so every hook event names its session, and `--settings <file>` to add its hooks. The file is one per Claude start, and the hook URL in it ends in a per-start key. That key, not `session_id`, routes hooks to the tab.
 - The environment drops the markers a running Claude Code session gives its children (`CLAUDECODE`, `CLAUDE_CODE_ENTRYPOINT`, `CLAUDE_CODE_CHILD_SESSION`, `CLAUDE_CODE_SESSION_ID` and more; the list is `NESTING` in `src/main/terminal/spec.ts`). So a Blueprint started from inside a Claude Code session still runs normal sessions. Claude Code's own settings, such as `CLAUDE_CODE_USE_BEDROCK`, pass through. Newer Claude Code versions add markers: a session footer saying "inherited … marker" means one is missing from the list.
 - Blueprint looks for `claude` on PATH, then in `~/.local/bin` and `~/.claude/local`, because a desktop launcher often starts apps without `~/.local/bin` on PATH.
 - Claude Code handles sign-in and its folder-trust question itself, inside the pane. The trust question defaults to "No, exit", which ends the session; Blueprint then offers Restart.
@@ -22,7 +22,7 @@ Code-level detail for [Talk to Claude in a pane](../../usecase/blueprint/talk_to
 
 Status comes from three sources: Claude Code's hooks, the keys the Developer types, and the session's transcript. Hooks alone are not enough, because some answers and every refusal fire no hook (see below).
 
-The generated settings file adds HTTP hooks (`"type": "http"`) for `UserPromptSubmit`, `PermissionRequest`, `PostToolUse` (matcher `*`), `Notification` and `Stop`. Claude Code POSTs each event's JSON to a local listener on `127.0.0.1` with a random port, and a random token in the `Authorization` header. The timeout is 2 seconds. The listener answers `204` with no body, so the `PermissionRequest` hook never answers a prompt for the Developer. HTTP hooks need no `curl` and no shell. The file holds the token, so only the Developer can read it, and Blueprint deletes it on quit.
+The generated settings file adds HTTP hooks (`"type": "http"`) for `UserPromptSubmit`, `PermissionRequest`, `PostToolUse` (matcher `*`), `Notification` and `Stop`. Claude Code POSTs each event's JSON to a local listener on `127.0.0.1` with a random port, and a random token in the `Authorization` header. The timeout is 2 seconds. The listener answers `204` with no body, so the `PermissionRequest` hook never answers a prompt for the Developer. HTTP hooks need no `curl` and no shell. Blueprint writes one settings file per Claude start. Its hook URL ends in a per-start key (`/hook/<key>`), and that key, not `session_id`, routes hooks to the tab. `session_id` and `transcript_path` only choose the transcript to follow, which changes after `/clear`. The files sit in a private directory, in `$XDG_RUNTIME_DIR` when it is set. They hold the token, so only the Developer can read them, and Blueprint deletes the directory on quit.
 
 A Claude session shows idle once its terminal runs. There is no `SessionStart` hook: Claude Code skips HTTP hooks for that event.
 
@@ -50,6 +50,7 @@ Checked on 2026-11-21 with a real session whose hooks logged every event:
 - `Notification` with type `idle_prompt` fires about 60 seconds after a turn ends. It must not mark Needs you.
 - Approving a prompt fires nothing. The next hook is `PostToolUse`, once the tool finishes, which can be minutes later. Hence the typing rule.
 - Refusing a prompt (Esc or "No") and pressing Esc mid-turn end the turn with no hook at all: no `Stop`, no `PermissionDenied`, and no later `idle_prompt`. The transcript is the only trace. It gains a user entry `[Request interrupted by user for tool use]` or `[Request interrupted by user]`.
+- `/clear` starts a new session id and a new transcript. `SessionEnd` fires with reason `clear`, and the next prompt's hooks carry the new id. Compaction keeps the same id.
 - `SubagentStop` fires right after `Stop` for Claude Code's own background agents. It carries no status.
 
 ### Rules
@@ -75,5 +76,6 @@ Checked on 2026-11-21 with the built app, Claude Code 2.1.330 in manual mode, an
 
 - A real desktop notification on GNOME, and clicking it to focus the session, is not yet verified by hand.
 - Managed settings can block Blueprint's hooks (`allowedHttpHookUrls`, `allowManagedHooksOnly`). The sessions then never change status.
+- The Developer's own `disableAllHooks` setting silences Blueprint's hooks too. The sessions then never change status.
 - `elicitation_dialog` (an MCP server asking for input) is untested. It may fire `PermissionRequest` too.
 - The merge check used a folder's settings, not the Developer's `~/.claude/settings.json`. Both go through the same merge, so it should hold. The real-app check used a folder's settings again.
