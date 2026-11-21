@@ -147,3 +147,17 @@ test('a session keeps its status after /clear', async () => {
   await expect(pane).toHaveAttribute('data-status', 'idle')
   await app.close()
 })
+
+test("moving through a prompt's options keeps Needs you", async () => {
+  const { app, page } = await launch()
+  const pane = page.locator('[data-tab="claude-1"]')
+  await expect.poll(() => probeText(page, 'claude-1')).toContain('claude ready')
+  await typeInto(page, 'claude-1', 'p?')
+  await expect(pane).toHaveAttribute('data-status', 'needs-you')
+  await page.keyboard.press('ArrowDown')
+  await page.waitForTimeout(300)
+  await expect(pane).toHaveAttribute('data-status', 'needs-you')
+  await typeInto(page, 'claude-1', '1')
+  await expect(pane).toHaveAttribute('data-status', 'working')
+  await app.close()
+})

@@ -9,6 +9,17 @@ import { xtermTheme } from '../theme/xterm'
 import { terminalKeyAction } from './keys'
 import { useTerminalStatus } from './status'
 
+const NAVIGATION_KEYS = new Set([
+  'ArrowUp',
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+  'PageUp',
+  'PageDown',
+  'Home',
+  'End',
+])
+
 /**
  * One tab's terminal: the xterm.js view and its program in the main process. A session lives
  * outside React, so remounting a panel (or React StrictMode) never starts a second program.
@@ -46,7 +57,12 @@ export class TerminalSession {
       return action === null
     })
     // onKey, not onData: onData also carries focus reports, mouse reports and the terminal's answers.
-    if (kind === 'claude') this.term.onKey(() => useClaudeStatus.getState().apply(tabId, { kind: 'typed' }))
+    if (kind === 'claude') {
+      this.term.onKey(({ domEvent }) => {
+        // These keys move through a prompt's options without answering it.
+        if (!NAVIGATION_KEYS.has(domEvent.key)) useClaudeStatus.getState().apply(tabId, { kind: 'typed' })
+      })
+    }
     this.term.onData((data) => window.blueprint.write(tabId, data))
     this.term.onResize(({ cols, rows }) => window.blueprint.resize(tabId, cols, rows))
     window.blueprint.onData(tabId, (data) => this.term.write(data))
