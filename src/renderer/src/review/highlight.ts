@@ -62,24 +62,48 @@ const theme = createCssVariablesTheme({
 })
 
 let highlighter: Promise<HighlighterCore> | undefined
-const loaded = new Set<string>()
+const loading = new Map<string, Promise<void>>()
 
 function core(): Promise<HighlighterCore> {
-  // The JavaScript engine: the renderer's CSP allows no WebAssembly.
-  highlighter ??= createHighlighterCore({ themes: [theme], langs: [], engine: createJavaScriptRegexEngine() })
+  if (highlighter === undefined) {
+    // The JavaScript engine: the renderer's CSP allows no WebAssembly.
+    const made = createHighlighterCore({ themes: [theme], langs: [], engine: createJavaScriptRegexEngine() })
+    highlighter = made
+    // A failed start is dropped, so a later call can try again.
+    made.catch(() => {
+      if (highlighter === made) highlighter = undefined
+    })
+  }
   return highlighter
 }
 
-/** Colours each line by the file's language, or gives null when the extension is unknown. Lines run as one block. */
+/** Loads a language once, however many calls ask for it at the same time. A failure can be retried. */
+function loadOnce(h: HighlighterCore, lang: string, load: () => Promise<LanguageInput>): Promise<void> {
+  let p = loading.get(lang)
+  if (p === undefined) {
+    p = load().then((input) => h.loadLanguage(input))
+    loading.set(lang, p)
+    p.catch(() => {
+      if (loading.get(lang) === p) loading.delete(lang)
+    })
+  }
+  return p
+}
+
+/**
+ * Colours each line by the file's language, or gives null when the extension is unknown or the
+ * highlighter or language cannot load. Lines run as one block.
+ */
 export async function highlightLines(path: string, lines: string[]): Promise<Token[][] | null> {
   const lang = BY_EXTENSION[path.split('.').pop()?.toLowerCase() ?? '']
   const load = lang === undefined ? undefined : LANGS[lang]
   if (lang === undefined || load === undefined) return null
-  const h = await core()
-  if (!loaded.has(lang)) {
-    await h.loadLanguage(await load())
-    loaded.add(lang)
+  try {
+    const h = await core()
+    await loadOnce(h, lang, load)
+    const { tokens } = h.codeToTokens(lines.join('\n'), { lang, theme: 'blueprint' })
+    return tokens.map((line) => line.map((t) => ({ text: t.content, color: t.color })))
+  } catch {
+    return null
   }
-  const { tokens } = h.codeToTokens(lines.join('\n'), { lang, theme: 'blueprint' })
-  return tokens.map((line) => line.map((t) => ({ text: t.content, color: t.color })))
 }
