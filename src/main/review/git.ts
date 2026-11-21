@@ -58,11 +58,17 @@ const NOT_LFS = ':(exclude,attr:filter=lfs)'
 /**
  * The environment of every git command Blueprint runs. Whatever the repository's config says, git starts no
  * daemon, writes no split index, runs no hook and collects no garbage. The repository's attributes apply,
- * so its eol rules and clean filters run as in the Developer's own `git add`.
+ * so its eol rules and clean filters run as in the Developer's own `git add`. Pathspec settings inherited
+ * from Blueprint's own environment are off: the add needs pathspec magic, and the one-file diff turns on
+ * `--literal-pathspecs` itself.
  */
 function gitEnv(extra: Record<string, string> = {}): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {
     ...process.env,
+    GIT_LITERAL_PATHSPECS: '0',
+    GIT_GLOB_PATHSPECS: '0',
+    GIT_NOGLOB_PATHSPECS: '0',
+    GIT_ICASE_PATHSPECS: '0',
     GIT_CONFIG_COUNT: String(ISOLATING_CONFIG.length),
     ...extra,
   }

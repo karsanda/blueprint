@@ -115,6 +115,8 @@ export class ReviewService {
 
   private async open(folder: string | null): Promise<void> {
     this.folderEpoch++
+    // A refresh still running for the earlier Folder sends nothing.
+    this.generation++
     this.folder = folder
     this.folderReal = folder === null ? undefined : realPath(folder)
     this.store = undefined
@@ -174,8 +176,8 @@ export class ReviewService {
   async startSession(tabId: string, startKey: string): Promise<void> {
     // The session base comes before Claude's first edit, unless Git takes longer than the wait.
     await this.hold(this.begin(tabId, startKey), 'take the session base', true)
-    // The refresh need not hold Claude back.
-    this.background(() => this.refresh())
+    // The refresh need not hold Claude back. It runs even while the base is still read, to show the session.
+    this.background(() => this.refresh(true))
   }
 
   /** Registers the session once the Folder is open, and takes its base. Settles when the base does. */
@@ -271,7 +273,8 @@ export class ReviewService {
     if (this.closed) return
     if (this.unopened) this.reopen()
     if (this.reading()) {
-      await this.publish({ kind: 'waiting', message: READING }, this.generation, force)
+      // A refresh still running from before the base was taken sends nothing.
+      await this.publish({ kind: 'waiting', message: READING }, ++this.generation, force)
       return
     }
     // While another snapshot runs, the latest tree is a little old, but the range may have changed.
@@ -280,7 +283,7 @@ export class ReviewService {
     const generation = busy ? this.generation : ++this.generation
     let state: ReviewState
     try {
-      if (this.store && !busy) this.latest = await this.snapshot(this.store)
+      if (this.store && !busy) await this.snapshot(this.store)
       state = await this.build(this.latest)
     } catch (error) {
       this.warn('refresh the review', error)
@@ -293,11 +296,12 @@ export class ReviewService {
     try {
       const session = this.shownKey ? this.sessions.get(this.shownKey) : undefined
       const base = session && this.baseOf(session)?.tree
-      if (!this.store || !session || !base || !this.latest) return { kind: 'none' }
-      const change = (await this.store.changes(base, this.latest)).find((c) => c.path === path)
+      const latest = this.latest
+      if (!this.store || !session || !base || !latest) return { kind: 'none' }
+      const change = (await this.store.changes(base, latest)).find((c) => c.path === path)
       if (!change) return { kind: 'none' }
       if (change.binary) return { kind: 'binary' }
-      const patch = await this.store.diff(base, this.latest, path)
+      const patch = await this.store.diff(base, latest, path)
       return {
         kind: 'text',
         patch,
@@ -343,13 +347,17 @@ export class ReviewService {
     return base
   }
 
-  /** Takes a snapshot. One that succeeds also becomes every base whose own snapshot failed. */
+  /**
+   * Takes a snapshot. Snapshots run in order, so one that succeeds is the latest tree of the Folder. It also
+   * becomes every base whose own snapshot failed.
+   */
   private snapshot(store: SnapshotStore): Promise<string> {
     const epoch = this.folderEpoch
     const taken = store.snapshot()
     taken.then(
       (tree) => {
         if (epoch !== this.folderEpoch) return
+        this.latest = tree
         for (const session of this.sessions.values()) {
           for (const base of [session.base, session.turnBase]) {
             if (!base?.failed) continue

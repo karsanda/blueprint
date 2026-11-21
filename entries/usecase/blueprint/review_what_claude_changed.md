@@ -80,6 +80,7 @@ Test cases:
 - A file that both Claude Code and the Developer changed shows as Claude's.
 - Files that Claude Code changes through tools from other programs show as changed outside Claude.
 - Files stored with Git LFS are not listed.
+- In a very large Folder, Claude's first changes after a start or a prompt may not be listed.
 
 ## Terms
 

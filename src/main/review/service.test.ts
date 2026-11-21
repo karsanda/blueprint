@@ -315,11 +315,15 @@ describe('ReviewService', () => {
     await r.svc.startSession('claude-1', KEY)
     expect(Date.now() - started).toBeGreaterThanOrEqual(WAIT_MS - 5)
     expect(Date.now() - started).toBeLessThan(SLOW_MS)
+    // The session shows while its base is still read.
+    await vi.waitFor(() => expect(r.last()).toEqual(NO_PROMPT), { timeout: 300 })
     started = Date.now()
     await r.svc.hook(KEY, prompt())
     expect(Date.now() - started).toBeGreaterThanOrEqual(WAIT_MS - 5)
     expect(Date.now() - started).toBeLessThan(SLOW_MS)
     expect(r.last()).toEqual(READING)
+    // The snapshots already started stay slow; the rest of the test need not be.
+    fake.set({ slow: false })
     await vi.waitFor(() => expect(r.last()).toEqual({ kind: 'changes', range: 'turn', changes: [] }), {
       timeout: 10_000,
     })
@@ -329,20 +333,21 @@ describe('ReviewService', () => {
 
   it("with a git slower than the wait bound, a file Claude's shell command writes is still Claude's", async () => {
     const fake = fakeGit()
-    fake.set({ slow: true })
     const r = await rig({ start: false, git: fake.git, waitMs: WAIT_MS, timeoutMs: KILL_MS })
     await r.svc.startSession('claude-1', KEY)
     await r.svc.hook(KEY, prompt())
-    // The turn base has landed, and Git is idle.
-    await vi.waitFor(() => expect(r.last()).toEqual({ kind: 'changes', range: 'turn', changes: [] }), {
-      timeout: 10_000,
-    })
+    await vi.waitFor(() => expect(r.last()).toEqual({ kind: 'changes', range: 'turn', changes: [] }))
+    // Lets the last refresh's snapshot finish, so Git is idle before it turns slow.
+    await sleep(100)
+    fake.set({ slow: true })
     const bash = { tool_name: 'Bash', tool_use_id: 't1', session_id: 's1' }
     const started = Date.now()
     await r.svc.hook(KEY, { hook_event_name: 'PreToolUse', ...bash })
+    expect(Date.now() - started).toBeGreaterThanOrEqual(WAIT_MS - 5)
     expect(Date.now() - started).toBeLessThan(SLOW_MS)
     // The snapshot before the command has read the Folder, but is still running when the command ends.
     r.write('e.txt')
+    fake.set({ slow: false })
     await r.svc.hook(KEY, { hook_event_name: 'PostToolUse', ...bash })
     expect(await r.listed('turn', [['e.txt', true]], 10_000)).toEqual([['e.txt', true]])
   }, 30_000)
@@ -355,15 +360,53 @@ describe('ReviewService', () => {
     fake.set({ slow: true })
     await r.svc.hook(KEY, prompt())
     await r.claudeWrites('b.txt')
+    fake.set({ slow: false })
     expect(await r.listed('turn', [['b.txt', true]], 10_000)).toEqual([['b.txt', true]])
+  }, 30_000)
+
+  it('a late turn base is dropped when a newer Developer prompt arrived', async () => {
+    const fake = fakeGit()
+    const r = await rig({ git: fake.git, waitMs: WAIT_MS, timeoutMs: KILL_MS })
+    await sleep(300)
+    fake.set({ slow: true })
+    // The first prompt's base reads the Folder at once and lands late.
+    await r.svc.hook(KEY, prompt())
+    r.write('x.txt')
+    // The second prompt's base reads the Folder once the first one lands, x.txt included.
+    await r.svc.hook(KEY, prompt())
+    fake.set({ slow: false })
+    await vi.waitFor(() => expect(r.last()).toEqual({ kind: 'changes', range: 'turn', changes: [] }), {
+      timeout: 5000,
+    })
+    await r.claudeWrites('c.txt')
+    expect(await r.listed('turn', [['c.txt', true]], 5000)).toEqual([['c.txt', true]])
+  }, 30_000)
+
+  it('a base that lands late lists nothing in reverse while the next snapshot runs', async () => {
+    const fake = fakeGit()
+    fake.set({ slow: true })
+    const r = await rig({ start: false, git: fake.git, waitMs: WAIT_MS, timeoutMs: KILL_MS })
+    r.svc.setView({ range: 'session', visible: false })
+    // The base waits behind the first refresh's snapshot, which has already read the Folder.
+    await r.svc.startSession('claude-1', KEY)
+    r.write('f.txt')
+    // Once the base lands, a view change lists it against the latest tree while the next snapshot runs.
+    await vi.waitFor(
+      () => {
+        r.svc.setView({ range: 'session', visible: false })
+        expect(r.last()).not.toEqual(READING)
+      },
+      { timeout: 5000, interval: 20 },
+    )
+    expect(r.last()).toEqual({ kind: 'changes', range: 'session', changes: [] })
   }, 30_000)
 
   it('a git that hangs past the kill limit says so, and the review recovers, its base taken again', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     try {
       const fake = fakeGit()
-      // The first refresh's snapshot and the session base hang.
-      fake.set({ hangs: 2 })
+      // The first refresh's snapshot, the session base and the refresh after it hang.
+      fake.set({ hangs: 3 })
       const r = await rig({ start: false, git: fake.git, waitMs: 100, timeoutMs: 400 })
       r.svc.setView({ range: 'session', visible: false })
       const started = Date.now()
@@ -371,11 +414,15 @@ describe('ReviewService', () => {
       expect(Date.now() - started).toBeLessThan(350)
       await vi.waitFor(() => expect(r.last()).toEqual(READING))
       await vi.waitFor(() => expect(r.last()).toEqual(GIT_FAILED), { timeout: 3000 })
-      // The base failed. The next snapshot that succeeds becomes it.
-      await vi.waitFor(() => expect(r.last()).toEqual({ kind: 'changes', range: 'session', changes: [] }), {
-        timeout: 3000,
-      })
       expect(warn).toHaveBeenCalledWith('Review could not take the session base:', expect.anything())
+      // The next snapshot that succeeds, here the next refresh's, becomes the failed base.
+      await vi.waitFor(
+        async () => {
+          await r.svc.refresh()
+          expect(r.last()).toEqual({ kind: 'changes', range: 'session', changes: [] })
+        },
+        { timeout: 3000 },
+      )
       await r.svc.hook(KEY, prompt())
       await r.claudeWrites('c.txt')
       expect(await r.listed('session', [['c.txt', true]])).toEqual([['c.txt', true]])

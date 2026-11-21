@@ -41,8 +41,9 @@ git write-tree
 - A snapshot that lands after its wait ended still counts:
   - The session is registered when Claude starts, with its base pending, so its hooks count while the base is read.
   - A late turn base still becomes the turn base for its prompt, unless a newer Developer prompt arrived since. The turn itself starts when the prompt arrives, so what Claude touches while the base is read belongs to it.
-  - A late snapshot before a command still pairs with the snapshot after it.
+  - A late snapshot before a command still pairs with the snapshot after it. When it reads the Folder after the command has written, that command's files count as outside Claude.
   - A late base may include Claude's first edits. Those then do not show.
+  - Snapshots run in order, so each one that succeeds becomes the latest tree, whichever moment took it. A list never compares a base with an older tree.
 - While the shown range's base is read, the Changes pane says `Review is reading this Folder with Git.`
 - When a snapshot or the list fails, for example on a git stopped at 5 minutes or a deleted Folder, the Changes pane says `Review could not read this Folder with Git. It tries again shortly.` The next refresh that succeeds replaces it. A base whose snapshot failed shows that message too. The next snapshot that succeeds, from a refresh or a hook, becomes that base.
 

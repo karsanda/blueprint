@@ -219,6 +219,31 @@ describe('SnapshotStore', () => {
     expect(patch).not.toContain('plain')
   })
 
+  it('inherited pathspec settings change neither the snapshot nor the one-file diff', async () => {
+    const repo = makeRepo()
+    const names = ['GIT_LITERAL_PATHSPECS', 'GIT_GLOB_PATHSPECS'] as const
+    const saved = names.map((name) => process.env[name])
+    for (const name of names) process.env[name] = '1'
+    try {
+      const store = await open(repo)
+      const before = await store.snapshot()
+      mkdirSync(join(repo, 'app', '[id]'), { recursive: true })
+      mkdirSync(join(repo, 'app', 'i'))
+      writeFileSync(join(repo, 'app', '[id]', 'page.tsx'), 'bracketed\n')
+      writeFileSync(join(repo, 'app', 'i', 'page.tsx'), 'plain\n')
+      const after = await store.snapshot()
+      const patch = await store.diff(before, after, 'app/[id]/page.tsx')
+      expect(patch).toContain('\n+bracketed\n')
+      expect(patch).not.toContain('plain')
+    } finally {
+      names.forEach((name, i) => {
+        const value = saved[i]
+        if (value === undefined) delete process.env[name]
+        else process.env[name] = value
+      })
+    }
+  })
+
   it('snapshots run one at a time', async () => {
     const repo = makeRepo()
     const store = await open(repo)
