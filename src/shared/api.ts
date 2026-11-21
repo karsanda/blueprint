@@ -26,6 +26,17 @@ export interface ExitInfo {
   signal?: number
 }
 
+export type ClaudeStatus = 'idle' | 'working' | 'needs-you'
+
+/** What Blueprint learned about a Claude session. The renderer folds it into a ClaudeStatus. */
+export type StatusSignal =
+  | { kind: 'prompt' } // UserPromptSubmit
+  | { kind: 'asks' } // PermissionRequest, or Notification permission_prompt / elicitation_dialog
+  | { kind: 'tool-done' } // PostToolUse
+  | { kind: 'stop' } // Stop
+  | { kind: 'interrupted' } // the transcript gained an interrupt line
+  | { kind: 'typed' } // the Developer typed a key in the pane (renderer only)
+
 /** The API the preload script exposes to the renderer as `window.blueprint`. */
 export interface BlueprintApi {
   /** True when e2e tests run the app (BLUEPRINT_E2E=1). */
