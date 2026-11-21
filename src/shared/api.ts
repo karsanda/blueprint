@@ -37,6 +37,5 @@ export interface BlueprintApi {
   resize(tabId: string, cols: number, rows: number): void
   onData(tabId: string, cb: (data: string) => void): () => void
   onExit(tabId: string, cb: (exit: ExitInfo) => void): () => void
-  readClipboard(): Promise<string>
   writeClipboard(text: string): void
 }

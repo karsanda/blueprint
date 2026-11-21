@@ -25,7 +25,6 @@ export function registerIpc(win: BrowserWindow, deps: IpcDeps): void {
     deps.manager.resize(tabId, cols, rows),
   )
 
-  ipcMain.handle('clipboard:read', async (): Promise<string> => clipboard.readText())
   ipcMain.on('clipboard:write', (_e, text: string) => clipboard.writeText(text))
 }
 

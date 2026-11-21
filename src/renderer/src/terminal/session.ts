@@ -5,6 +5,7 @@ import { WebglAddon } from '@xterm/addon-webgl'
 import { Terminal } from '@xterm/xterm'
 import type { TerminalKind } from '../../../shared/api'
 import { xtermTheme } from '../theme/xterm'
+import { terminalKeyAction } from './keys'
 import { useTerminalStatus } from './status'
 
 /**
@@ -32,6 +33,16 @@ export class TerminalSession {
       theme: xtermTheme,
     })
     this.term.loadAddon(this.fit)
+    this.term.attachCustomKeyEventHandler((e) => {
+      const action = terminalKeyAction(e)
+      if (action === 'copy') {
+        const selection = this.term.getSelection()
+        if (selection) window.blueprint.writeClipboard(selection)
+      }
+      // Paste is Chromium's own Ctrl+Shift+V and Shift+Insert: its paste event reaches xterm,
+      // which adds bracketed-paste marks when the program asks. Handling it here would paste twice.
+      return action === null
+    })
     this.term.onData((data) => window.blueprint.write(tabId, data))
     this.term.onResize(({ cols, rows }) => window.blueprint.resize(tabId, cols, rows))
     window.blueprint.onData(tabId, (data) => this.term.write(data))

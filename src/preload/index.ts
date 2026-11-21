@@ -22,7 +22,6 @@ const api: BlueprintApi = {
   resize: (tabId, cols, rows) => ipcRenderer.send('terminal:resize', tabId, cols, rows),
   onData: (tabId, cb) => onTab<string>('terminal:data', tabId, cb),
   onExit: (tabId, cb) => onTab<ExitInfo>('terminal:exit', tabId, cb),
-  readClipboard: (): Promise<string> => ipcRenderer.invoke('clipboard:read'),
   writeClipboard: (text) => ipcRenderer.send('clipboard:write', text),
 }
 
