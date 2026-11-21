@@ -15,7 +15,8 @@
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "test": "vitest run",
-    "e2e": "electron-vite build && playwright test"
+    "e2e": "electron-vite build && playwright test",
+    "shots": "electron-vite build && playwright test --config playwright.shots.config.ts"
   },
   "dependencies": {
     "node-pty": "1.1.0"

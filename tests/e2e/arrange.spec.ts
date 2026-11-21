@@ -12,7 +12,7 @@ async function box(locator: Locator): Promise<{ x: number; y: number; width: num
 }
 
 async function tabTitles(group: Locator): Promise<string[]> {
-  return (await group.locator('.dv-tab').allInnerTexts()).map((t) => t.trim())
+  return (await group.locator('.dv-tab').allTextContents()).map((t) => t.trim())
 }
 
 function lastLine(text: string): string {
@@ -26,24 +26,23 @@ function lastLine(text: string): string {
 async function dropTab(page: Page, title: string, x: number, y: number): Promise<void> {
   const fire = (type: string, at: 'tab' | 'point') =>
     page.evaluate(
-      ({ title, type, at, x, y }) => {
-        const tab = [...document.querySelectorAll('.dv-tab')].find((t) => t.textContent?.trim() === title)
-        if (!tab) throw new Error(`No tab ${title}`)
-        const w = window as unknown as { dragData?: DataTransfer }
-        w.dragData ??= new DataTransfer()
+      (e) => {
+        const tab = [...document.querySelectorAll('.dv-tab')].find((t) => t.textContent?.trim() === e.title)
+        if (!tab) throw new Error(`No tab ${e.title}`)
+        window.dragData ??= new DataTransfer()
         const r = tab.getBoundingClientRect()
-        const [cx, cy] = at === 'tab' ? [r.x + 5, r.y + 5] : [x, y]
-        const el = at === 'tab' ? tab : document.elementFromPoint(x, y)
+        const [cx, cy] = e.at === 'tab' ? [r.x + 5, r.y + 5] : [e.x, e.y]
+        const el = e.at === 'tab' ? tab : document.elementFromPoint(e.x, e.y)
         el?.dispatchEvent(
-          new DragEvent(type, {
+          new DragEvent(e.type, {
             bubbles: true,
             cancelable: true,
             clientX: cx,
             clientY: cy,
-            dataTransfer: w.dragData,
+            dataTransfer: window.dragData,
           }),
         )
-        if (type === 'dragend') w.dragData = undefined
+        if (e.type === 'dragend') window.dragData = undefined
       },
       { title, type, at, x, y },
     )

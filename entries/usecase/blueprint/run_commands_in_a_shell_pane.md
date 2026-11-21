@@ -38,9 +38,9 @@ Covers: Basic Flow, Alternative Flow 1, Alternative Flow 2.
 
 Work items:
 
-- [ ] Start the Developer's shell in the Folder, in the Blueprint look
-- [ ] Copy and paste with the usual terminal keys
-- [ ] Offer a new shell when it exits
+- [x] Start the Developer's shell in the Folder, in the Blueprint look ([#1](https://github.com/karsanda/blueprint/issues/1))
+- [x] Copy and paste with the usual terminal keys ([#1](https://github.com/karsanda/blueprint/issues/1))
+- [x] Offer a new shell when it exits ([#1](https://github.com/karsanda/blueprint/issues/1))
 
 Test cases:
 

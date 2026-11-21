@@ -10,7 +10,10 @@ Code-level detail for [Talk to Claude in a pane](../../usecase/blueprint/talk_to
 
 - Each Claude session is the real `claude` CLI in a pseudo-terminal (node-pty), drawn with xterm.js and its WebGL renderer, with the ligatures add-on loaded before WebGL.
 - Blueprint passes `--session-id <uuid>` so every hook event names its session, and `--settings <file>` to add its hooks.
-- The environment drops `CLAUDECODE` and `CLAUDE_CODE_ENTRYPOINT`, so a session started from inside another Claude Code session still runs normally.
+- The environment drops the markers a running Claude Code session gives its children (`CLAUDECODE`, `CLAUDE_CODE_ENTRYPOINT`, `CLAUDE_CODE_CHILD_SESSION`, `CLAUDE_CODE_SESSION_ID` and more; the list is `NESTING` in `src/main/terminal/spec.ts`). So a Blueprint started from inside a Claude Code session still runs normal sessions. Claude Code's own settings, such as `CLAUDE_CODE_USE_BEDROCK`, pass through. Newer Claude Code versions add markers: a session footer saying "inherited … marker" means one is missing from the list.
+- Blueprint looks for `claude` on PATH, then in `~/.local/bin` and `~/.claude/local`, because a desktop launcher often starts apps without `~/.local/bin` on PATH.
+- Claude Code handles sign-in and its folder-trust question itself, inside the pane. The trust question defaults to "No, exit", which ends the session; Blueprint then offers Restart.
+- Restarting a tab replaces its terminal. Only a tab's current terminal reports output and its exit, so the replaced one never shows "exited".
 - `TERM=xterm-256color`, `COLORTERM=truecolor`.
 - Resume after reopening: `claude --resume <session-id>`.
 - No Agent SDK: it needs API-key billing. The CLI uses the Developer's own sign-in.

@@ -1,22 +1,87 @@
-/* Blueprint colors for dockview. Task 9 adds the drafting details. */
+/* Blueprint drafting look for dockview: double-rule panes, uppercase tab labels, quiet sashes. */
 .dockview-theme-blueprint {
   --dv-background-color: transparent;
   --dv-group-view-background-color: var(--bp-sheet);
   --dv-tabs-and-actions-container-background-color: var(--bp-sheet);
   --dv-tabs-and-actions-container-font-size: 10.5px;
   --dv-tabs-and-actions-container-height: 28px;
-  --dv-activegroup-visiblepanel-tab-background-color: var(--bp-bg);
+  --dv-activegroup-visiblepanel-tab-background-color: var(--bp-sheet);
   --dv-activegroup-hiddenpanel-tab-background-color: var(--bp-sheet);
-  --dv-inactivegroup-visiblepanel-tab-background-color: var(--bp-bg);
+  --dv-inactivegroup-visiblepanel-tab-background-color: var(--bp-sheet);
   --dv-inactivegroup-hiddenpanel-tab-background-color: var(--bp-sheet);
-  --dv-activegroup-visiblepanel-tab-color: var(--bp-ink);
+  --dv-activegroup-visiblepanel-tab-color: var(--bp-head);
   --dv-activegroup-hiddenpanel-tab-color: var(--bp-muted);
-  --dv-inactivegroup-visiblepanel-tab-color: var(--bp-muted);
+  --dv-inactivegroup-visiblepanel-tab-color: var(--bp-chrome);
   --dv-inactivegroup-hiddenpanel-tab-color: var(--bp-muted);
   --dv-separator-border: transparent;
   --dv-paneview-header-border-color: var(--bp-line-faint);
-  --dv-tab-divider-color: var(--bp-line-faint);
+  --dv-tab-divider-color: transparent;
   --dv-drag-over-background-color: var(--bp-sel);
   --dv-drag-over-border-color: var(--bp-line);
-  padding: 0 14px 14px;
+  --dv-active-sash-color: var(--bp-line-soft);
+  padding: 0 10px 10px;
+}
+
+/* Room for the outer rule: it sits 3-4px outside the pane, and dockview's containers clip. With the
+   theme's 6px gap, panes end up 14px apart and 14px from the window edge. */
+.dockview-theme-blueprint .dv-view.visible:has(> .dv-groupview) {
+  padding: 4px;
+}
+/* dockview hides a pane (behind a zoomed one) by giving its view no width; drop the rules so nothing shows. */
+.dockview-theme-blueprint .dv-view:not(.visible) > .dv-groupview {
+  border-width: 0;
+  outline: none !important;
+}
+
+/* A pane is drawn twice: a solid rule, and a faint one 3px outside it. The active pane's outer rule is agent yellow.
+   dockview sets an inline `outline: none` on each pane, so these rules need !important to win. */
+.dockview-theme-blueprint .dv-groupview {
+  border: 1.5px solid var(--bp-line);
+  outline: 1px solid var(--bp-line-faint) !important;
+  outline-offset: 3px;
+}
+.dockview-theme-blueprint .dv-groupview.dv-active-group {
+  outline-color: var(--bp-agent) !important;
+}
+
+.dockview-theme-blueprint .dv-tabs-and-actions-container {
+  border-bottom: 1px solid var(--bp-line-soft);
+}
+.dockview-theme-blueprint .dv-tab {
+  font-family: var(--bp-font-ui);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding-inline: 10px 6px;
+}
+.dockview-theme-blueprint .dv-active-group .dv-tab.dv-active-tab {
+  box-shadow: inset 0 -2px 0 var(--bp-agent);
+}
+.dockview-theme-blueprint .dv-inactive-group .dv-tab.dv-active-tab {
+  box-shadow: inset 0 -2px 0 var(--bp-line-soft);
+}
+
+/* The column-width dimension line above a Claude pane: |←— 96 COL —→| */
+.bp-dim {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 2px 4px;
+  font: 600 9.5px var(--bp-font-ui);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--bp-muted);
+}
+.bp-dim::before,
+.bp-dim::after {
+  content: '';
+  flex: 1;
+  height: 7px;
+  border-top: 1px solid var(--bp-muted);
+  border-left: 1px solid var(--bp-muted);
+  transform: translateY(3px);
+}
+.bp-dim::after {
+  border-left: 0;
+  border-right: 1px solid var(--bp-muted);
 }

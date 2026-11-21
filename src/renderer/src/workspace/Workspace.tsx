@@ -5,7 +5,7 @@ import { TerminalPanel } from '../terminal/TerminalPanel'
 import { addDefaultPanels } from './defaultLayout'
 import { ZoomAction } from './ZoomAction'
 
-const blueprintTheme: DockviewTheme = { name: 'blueprint', className: 'dockview-theme-blueprint', gap: 14 }
+const blueprintTheme: DockviewTheme = { name: 'blueprint', className: 'dockview-theme-blueprint', gap: 6 }
 const components = { terminal: TerminalPanel }
 
 export function Workspace() {

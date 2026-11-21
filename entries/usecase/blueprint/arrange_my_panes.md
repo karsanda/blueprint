@@ -42,10 +42,10 @@ Covers: Basic Flow steps 1 to 5, Alternative Flow 2.
 
 Work items:
 
-- [ ] Tiled panes with tabs, in the Blueprint look
-- [ ] Resize by dragging the gap between panes
-- [ ] Drag a tab to stack it or to split a pane
-- [ ] Zoom a pane in and out
+- [x] Tiled panes with tabs, in the Blueprint look ([#1](https://github.com/karsanda/blueprint/issues/1))
+- [x] Resize by dragging the gap between panes ([#1](https://github.com/karsanda/blueprint/issues/1))
+- [x] Drag a tab to stack it or to split a pane ([#1](https://github.com/karsanda/blueprint/issues/1))
+- [x] Zoom a pane in and out ([#1](https://github.com/karsanda/blueprint/issues/1))
 
 Test cases:
 

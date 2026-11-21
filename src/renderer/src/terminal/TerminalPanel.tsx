@@ -1,5 +1,5 @@
 import type { IDockviewPanelProps } from 'dockview-react'
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react'
 import type { TerminalKind } from '../../../shared/api'
 import { getSession } from './session'
 import { useTerminalStatus } from './status'
@@ -12,6 +12,7 @@ export interface TerminalParams {
 export function TerminalPanel({ api, params }: IDockviewPanelProps<TerminalParams>) {
   const host = useRef<HTMLDivElement>(null)
   const status = useTerminalStatus((s) => s.tabs[api.id])
+  const cols = useCols(api.id, params.kind)
   useEffect(() => {
     const session = getSession(api.id, params.kind)
     if (host.current) session.attach(host.current)
@@ -20,6 +21,7 @@ export function TerminalPanel({ api, params }: IDockviewPanelProps<TerminalParam
 
   return (
     <div className="flex h-full w-full flex-col bg-bp-sheet p-1.5" data-tab={api.id}>
+      {params.kind === 'claude' && <div className="bp-dim">{cols} COL</div>}
       <div ref={host} className="min-h-0 flex-1" />
       {status && (
         <TerminalNotice
@@ -30,4 +32,17 @@ export function TerminalPanel({ api, params }: IDockviewPanelProps<TerminalParam
       )}
     </div>
   )
+}
+
+/** The terminal's width in columns, kept current as the pane resizes. */
+function useCols(tabId: string, kind: TerminalKind): number {
+  const session = getSession(tabId, kind)
+  const subscribe = useCallback(
+    (onChange: () => void) => {
+      const sub = session.term.onResize(onChange)
+      return () => sub.dispose()
+    },
+    [session],
+  )
+  return useSyncExternalStore(subscribe, () => session.term.cols)
 }

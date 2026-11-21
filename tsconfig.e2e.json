@@ -13,5 +13,5 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true
   },
-  "include": ["tests", "scripts/*.ts"]
+  "include": ["tests", "scripts/*.ts", "playwright.shots.config.ts"]
 }
