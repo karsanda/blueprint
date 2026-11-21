@@ -1,9 +1,11 @@
+import { existsSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { type BrowserWindow, clipboard, dialog, ipcMain, screen } from 'electron'
 import type {
   FileDiff,
   FolderState,
   ReviewView,
+  SavedConversation,
   StartFailure,
   StartRequest,
   StartResult,
@@ -13,6 +15,7 @@ import type { NeedsYouNotifier } from './notify'
 import type { ReviewService } from './review/service'
 import type { StatusRelay } from './status/relay'
 import type { TerminalManager } from './terminal/manager'
+import { resumable } from './terminal/resume'
 import { claudeSpec, type SpawnSpec, shellSpec } from './terminal/spec'
 
 export interface IpcDeps {
@@ -21,6 +24,8 @@ export interface IpcDeps {
   relay: StatusRelay
   notifier: NeedsYouNotifier
   review: ReviewService
+  /** Tells the renderer which conversation a Claude tab is in: the resumed one, or null for a new one. */
+  sendConversation: (tabId: string, conversation: SavedConversation | null) => void
   /** Writes the Claude Code settings that carry Blueprint's hooks for one start, and returns the file. */
   hookSettingsFor: (startKey: string) => string
 }
@@ -85,14 +90,19 @@ export function registerIpc(win: BrowserWindow, deps: IpcDeps, userData: string)
 async function startTerminal(deps: IpcDeps, req: StartRequest): Promise<StartResult> {
   const folder = deps.folder.folder
   if (!folder) return { ok: false, failure: { reason: 'spawn-failed', message: 'No Folder is open.' } }
-  // Each Claude start is a new conversation; resuming one comes with a later slice.
-  const sessionId = randomUUID()
+  // Only a conversation whose transcript is still on disk can be resumed; anything else starts a new one.
+  const resume = req.kind === 'claude' && resumable(req.resume, existsSync) ? req.resume : undefined
   // The start key, not the session id, routes hooks to the tab: `/clear` changes the session id.
   const startKey = randomUUID()
   let spec: SpawnSpec | StartFailure
   if (req.kind === 'claude') {
     try {
-      spec = claudeSpec(folder, process.env, sessionId, deps.hookSettingsFor(startKey))
+      spec = claudeSpec(
+        folder,
+        process.env,
+        resume ? { resume: resume.sessionId } : { sessionId: randomUUID() },
+        deps.hookSettingsFor(startKey),
+      )
     } catch (err) {
       return { ok: false, failure: { reason: 'spawn-failed', message: errorMessage(err) } }
     }
@@ -116,7 +126,15 @@ async function startTerminal(deps: IpcDeps, req: StartRequest): Promise<StartRes
     }
   }
   try {
-    return { ok: true, pid: deps.manager.start(req.tabId, spec, req.cols, req.rows) }
+    const pid = deps.manager.start(req.tabId, spec, req.cols, req.rows)
+    if (req.kind === 'claude')
+      deps.sendConversation(
+        req.tabId,
+        resume ? { sessionId: resume.sessionId, transcript: resume.transcript } : null,
+      )
+    return req.kind === 'claude' && req.resume !== undefined
+      ? { ok: true, pid, resumed: resume !== undefined }
+      : { ok: true, pid }
   } catch (err) {
     return {
       ok: false,

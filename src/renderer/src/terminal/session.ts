@@ -3,7 +3,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import { LigaturesAddon } from '@xterm/addon-ligatures'
 import { WebglAddon } from '@xterm/addon-webgl'
 import { Terminal } from '@xterm/xterm'
-import type { TerminalKind } from '../../../shared/api'
+import type { SavedConversation, TerminalKind } from '../../../shared/api'
 import { useClaudeStatus } from '../status/store'
 import { xtermTheme } from '../theme/xterm'
 import { terminalKeyAction } from './keys'
@@ -36,8 +36,11 @@ export class TerminalSession {
   private host: HTMLElement | null = null
   private frame = 0
   private readonly offs: (() => void)[] = []
+  /** The saved conversation the first start asks to continue; restarts never do. */
+  private resume: SavedConversation | undefined
 
-  constructor(tabId: string, kind: TerminalKind) {
+  constructor(tabId: string, kind: TerminalKind, resume?: SavedConversation) {
+    this.resume = resume
     this.tabId = tabId
     this.kind = kind
     this.term = new Terminal({
@@ -122,14 +125,28 @@ export class TerminalSession {
     if (this.kind === 'claude') useClaudeStatus.getState().set(this.tabId, undefined)
     this.fitToHost()
     const { cols, rows } = this.term
-    const result = await window.blueprint.startTerminal({ tabId: this.tabId, kind: this.kind, cols, rows })
+    // The conversation stays until a start succeeds, so Restart after a failed first start still resumes it.
+    const resume = this.resume
+    const result = await window.blueprint.startTerminal({
+      tabId: this.tabId,
+      kind: this.kind,
+      cols,
+      rows,
+      ...(resume ? { resume } : {}),
+    })
     // The tab was closed while its program was starting.
     if (this.disposed) return
     if (!result.ok) {
       status.set(this.tabId, { state: 'failed', failure: result.failure })
       return
     }
-    status.set(this.tabId, { state: 'running' })
+    this.resume = undefined
+    status.set(
+      this.tabId,
+      resume && result.resumed === false
+        ? { state: 'running', notice: 'conversation-lost' }
+        : { state: 'running' },
+    )
     if (this.kind === 'claude') useClaudeStatus.getState().set(this.tabId, 'idle')
     // The pane may have changed size while the program was starting.
     if (this.term.cols !== cols || this.term.rows !== rows) {
@@ -166,10 +183,10 @@ export class TerminalSession {
 
 const sessions = new Map<string, TerminalSession>()
 
-export function getSession(tabId: string, kind: TerminalKind): TerminalSession {
+export function getSession(tabId: string, kind: TerminalKind, resume?: SavedConversation): TerminalSession {
   let session = sessions.get(tabId)
   if (!session) {
-    session = new TerminalSession(tabId, kind)
+    session = new TerminalSession(tabId, kind, resume)
     sessions.set(tabId, session)
   }
   return session

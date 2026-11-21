@@ -9,24 +9,24 @@ Code-level detail for [Talk to Claude in a pane](../../usecase/blueprint/talk_to
 ## Running Claude Code
 
 - Each Claude session is the real `claude` CLI in a pseudo-terminal (node-pty), drawn with xterm.js and its WebGL renderer, with the ligatures add-on loaded before WebGL.
-- Blueprint passes `--session-id <uuid>` so every hook event names its session, and `--settings <file>` to add its hooks. The file is one per Claude start, and the hook URL in it ends in a per-start key. That key, not `session_id`, routes hooks to the tab.
+- Blueprint passes `--session-id <uuid>` for a new conversation (and `--resume <sessionId>` instead for a resumed one) so every hook event names its session, and `--settings <file>` to add its hooks. The file is one per Claude start, and the hook URL in it ends in a per-start key. That key, not `session_id`, routes hooks to the tab.
 - The environment drops the markers a running Claude Code session gives its children (`CLAUDECODE`, `CLAUDE_CODE_ENTRYPOINT`, `CLAUDE_CODE_CHILD_SESSION`, `CLAUDE_CODE_SESSION_ID` and more; the list is `NESTING` in `src/main/terminal/spec.ts`). So a Blueprint started from inside a Claude Code session still runs normal sessions. Claude Code's own settings, such as `CLAUDE_CODE_USE_BEDROCK`, pass through. Newer Claude Code versions add markers: a session footer saying "inherited … marker" means one is missing from the list.
 - Blueprint looks for `claude` on PATH, then in `~/.local/bin` and `~/.claude/local`, because a desktop launcher often starts apps without `~/.local/bin` on PATH.
 - Claude Code handles sign-in and its folder-trust question itself, inside the pane. The trust question defaults to "No, exit", which ends the session; Blueprint then offers Restart.
 - Restarting a tab replaces its terminal. Only a tab's current terminal reports output and its exit, so the replaced one never shows "exited".
 - `TERM=xterm-256color`, `COLORTERM=truecolor`.
-- Resume after reopening: `claude --resume <session-id>`.
+- Resume after reopening: see the section below.
 - No Agent SDK: it needs API-key billing. The CLI uses the Developer's own sign-in.
 
 ## Several sessions
 
 Detail for [Run several Claude sessions](../../usecase/blueprint/run_several_claude_sessions.md).
 
-- Each Claude tab is one Claude start, with its own `--session-id`, start key and hook settings file. Status, notifications and the review already follow the start key, so they need nothing new.
+- Each Claude tab is one Claude start, with its own session id (`--session-id` for a new conversation, `--resume` for a resumed one), start key and hook settings file. Status, notifications and the review already follow the start key, so they need nothing new.
 - Starting: every group that holds a Claude tab gets a `+` header action named "New Claude session". It adds a tab `claude-<n>` titled `Claude <n>` to that group, active and focused. `n` is one more than the highest number among the open Claude tabs and every number opened earlier in the run, so a closed session's number is never reused while Blueprint runs; the first tab, `claude-1`, is titled `Claude`.
 - Closing: Claude tabs get a close action (button and middle-click), except the last open Claude tab. An Idle session closes at once. A Working or Needs-you session asks first, in Blueprint's own dialog. Closing ends the program, forgets its start key, clears its status, and ends its review session. Shells, Changes and Difference still have no close action.
 - Renaming: double-click a Claude tab's title to edit it in place. Enter or leaving the field keeps the new name, Escape the old one; an empty name keeps the old one. The name is the dockview panel title, so the window title, notifications, the Changes pane and the close question all read it, and the layout file saves it.
-- Restored layouts accept `claude-<n>` tabs (terminal, kind `claude`). Each starts a fresh session.
+- Restored layouts accept `claude-<n>` tabs (terminal, kind `claude`). Each resumes its own saved conversation (see Resume after reopening).
 - Chromium allows about 16 WebGL contexts. When it drops one, that terminal falls back to xterm's DOM renderer, which `onContextLoss` already handles.
 - Launching the built `out/main/index.js` directly (as the hands-on check and the e2e harness do) makes Electron's app name "Electron", so its user data is `~/.config/Electron`, not `~/.config/blueprint`.
 
@@ -38,6 +38,40 @@ Real Claude Code 2.1.330 on Haiku, in manual mode, with two sessions in a scratc
 - Both sessions edited `notes.md`. Both tabs showed the overlap mark, each naming the other session.
 - Renaming Claude to "api retries" reached the title, the Changes header and the rows, including a Change made before the rename.
 - Closing Claude 2 while it worked asked first. After confirming, its tab was gone, the running `claude` processes went from 2 to 1, and both overlap marks cleared.
+
+## Resume after reopening
+
+Detail for [Talk to Claude in a pane](../../usecase/blueprint/talk_to_claude_in_a_pane.md), Slice 2.
+
+- Each Claude tab saves the conversation it continues with the tab itself: the panel parameter `conversation`, holding `{ sessionId, transcript }` from Claude Code's hooks. The layout file saves it like the tab's name. So a layout Blueprint throws away takes its conversations with it, a new `+` tab never inherits one, and a closed tab's conversation goes with the tab.
+- Main tells the renderer which conversation a tab continues. A start that resumes keeps the saved one; any other start clears it. The first `UserPromptSubmit` of a session id saves `{ session_id, transcript_path }`, so after `/clear` the tab saves the new conversation at its next prompt.
+- A tab's first start in a run sends its saved conversation. Main resumes with `claude --resume <sessionId> --settings <file>` only when `sessionId` is a UUID and `transcript` is an absolute path to an existing `<sessionId>.jsonl`. Otherwise it starts a new conversation with `--session-id`, and the pane shows a notice that the last conversation could not be found. An id that is not a UUID never reaches Claude Code's arguments.
+- Restart after Claude Code exits starts a new conversation, and so does a `+` tab. A first start that fails (for example `claude` is not found) keeps the saved conversation, so Restart after it still resumes. The new conversation is saved at its first prompt, so a tab that never got one starts fresh after reopening.
+- Claude Code keeps the session id on `--resume` and redraws the conversation in the pane. `--resume` with `--session-id` fails unless `--fork-session` is given, so a resumed start passes no `--session-id`. Hooks still route by the start key.
+- Shells start fresh in restored panes.
+
+### Checked against Claude Code 2.1.330
+
+On Haiku, in a scratch Folder:
+
+- `--resume <id>` continued the conversation under the same id: it answered from an earlier prompt, and the interactive pane showed the earlier turns.
+- `--resume` of an unknown id printed `No conversation found with session ID: <id>` and exited with code 1.
+- `--resume <id> --session-id <other>` failed: `--session-id with --continue or --resume also needs --fork-session.`
+
+### Checked in the real app
+
+Built app, real Claude Code 2.1.330 on Haiku, in a scratch Git folder.
+
+- Two sessions each got a prompt (remember ZEBRA, remember OTTER). The layout saved each tab's `{ sessionId, transcript }`, and the transcript paths were Claude Code's own `~/.claude/projects/<folder>/<id>.jsonl`.
+- After reopening, each tab showed its own earlier conversation, never the other's, and each answered its own word when asked. No notice showed.
+- With Claude 2's transcript deleted, reopening started a new conversation in Claude 2 with the notice, while Claude 1 still resumed. Dismiss removed the notice.
+
+### Known gaps
+
+- After `/clear`, the tab saves the new conversation only at its next prompt. Quitting before that resumes the conversation from before `/clear`.
+- A second window on a Folder that is already open resumes the same conversations, so two Claude Code processes share one session and transcript, and both windows overwrite the layout file. Follow-up: [#29](https://github.com/karsanda/blueprint/issues/29).
+- Blueprint only checks that the transcript file exists. If Claude Code still refuses the conversation, the tab shows Claude Code exited (code 1) at that reopen, and Restart starts a new conversation.
+- The review keeps its records only while Blueprint runs. After reopening, This session starts over, so Changes made before closing are not listed.
 
 ## Learning the status
 

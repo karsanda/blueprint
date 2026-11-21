@@ -13,11 +13,20 @@ test('claudeSpec starts claude in the Folder with the session id', () => {
   const claude = join(bin, 'claude')
   writeFileSync(claude, '#!/bin/sh\n')
   chmodSync(claude, 0o755)
-  expect(claudeSpec('/work/proj', { PATH: bin, HOME: bin }, 'abc', '/s.json')).toMatchObject({
+  expect(claudeSpec('/work/proj', { PATH: bin, HOME: bin }, { sessionId: 'abc' }, '/s.json')).toMatchObject({
     file: claude,
     args: ['--session-id', 'abc', '--settings', '/s.json'],
     cwd: '/work/proj',
   })
+})
+
+test('a resumed start passes --resume and no --session-id', () => {
+  const claude = join(bin, 'claude')
+  writeFileSync(claude, '#!/bin/sh\n')
+  chmodSync(claude, 0o755)
+  const ID = 'fb8023a7-89b0-439e-9c07-2d3254e55395'
+  const spec = claudeSpec('/work/proj', { PATH: bin, HOME: bin }, { resume: ID }, '/s.json')
+  expect(spec).toMatchObject({ args: ['--resume', ID, '--settings', '/s.json'] })
 })
 
 test('terminalEnv drops the Claude Code nesting variables', () => {
@@ -47,7 +56,7 @@ test("terminalEnv drops the parent session's markers but keeps Claude Code setti
 })
 
 test('claudeSpec explains a missing claude', () => {
-  expect(claudeSpec('/work/proj', { PATH: bin, HOME: bin }, 'abc', '/s.json')).toEqual({
+  expect(claudeSpec('/work/proj', { PATH: bin, HOME: bin }, { sessionId: 'abc' }, '/s.json')).toEqual({
     reason: 'not-installed',
     message: 'Claude Code is not installed, or Blueprint cannot find it on your PATH.',
     fix: 'Install it with: curl -fsSL https://claude.ai/install.sh | bash — then press Restart.',

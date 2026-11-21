@@ -1,4 +1,4 @@
-import type { StatusSignal } from '../../shared/api'
+import type { SavedConversation, StatusSignal } from '../../shared/api'
 import { type HookInput, signalFromHook } from './hooks'
 import { TranscriptFollower } from './transcript'
 
@@ -23,6 +23,8 @@ export class StatusRelay {
     private readonly send: (tabId: string, signal: StatusSignal) => void,
     makeFollower: (onInterrupt: (sessionId: string) => void) => Follower = (onInterrupt) =>
       new TranscriptFollower(onInterrupt),
+    private readonly onConversation: (tabId: string, conversation: SavedConversation) => void = () =>
+      undefined,
   ) {
     this.follower = makeFollower((sessionId) => {
       for (const start of this.startByKey.values()) {
@@ -60,6 +62,7 @@ export class StatusRelay {
       if (start.sessionId !== undefined) this.follower.unfollow(start.sessionId)
       start.sessionId = e.session_id
       this.follower.follow(e.session_id, e.transcript_path)
+      this.onConversation(start.tabId, { sessionId: e.session_id, transcript: e.transcript_path })
     }
     const signal = signalFromHook(e)
     if (signal) this.send(start.tabId, signal)

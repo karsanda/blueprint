@@ -45,7 +45,7 @@ export function terminalEnv(base: NodeJS.ProcessEnv): Record<string, string> {
 export function claudeSpec(
   folder: string,
   base: NodeJS.ProcessEnv,
-  sessionId: string,
+  start: { sessionId: string } | { resume: string },
   settingsFile: string,
 ): SpawnSpec | StartFailure {
   const file = findExecutable('claude', base)
@@ -58,7 +58,12 @@ export function claudeSpec(
   }
   return {
     file,
-    args: ['--session-id', sessionId, '--settings', settingsFile],
+    args: [
+      'sessionId' in start ? '--session-id' : '--resume',
+      'sessionId' in start ? start.sessionId : start.resume,
+      '--settings',
+      settingsFile,
+    ],
     cwd: folder,
     env: terminalEnv(base),
   }

@@ -20,7 +20,9 @@ The MVP is the six use cases below. We build them slice by slice, in this order:
 3. [Review what Claude changed](blueprint/review_what_claude_changed.md), Slices 1 and 2
 4. [Arrange my panes](blueprint/arrange_my_panes.md), Slice 2
 5. [Run several Claude sessions](blueprint/run_several_claude_sessions.md), Slices 1 and 2
-6. [Talk to Claude in a pane](blueprint/talk_to_claude_in_a_pane.md), Slice 2, [Run commands in a shell pane](blueprint/run_commands_in_a_shell_pane.md), Slice 2, and [Arrange my panes](blueprint/arrange_my_panes.md), Slice 3
+6. [Talk to Claude in a pane](blueprint/talk_to_claude_in_a_pane.md), Slice 2
+7. [Run commands in a shell pane](blueprint/run_commands_in_a_shell_pane.md), Slice 2
+8. [Arrange my panes](blueprint/arrange_my_panes.md), Slice 3
 
 ## claude
 

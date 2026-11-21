@@ -11,14 +11,24 @@ export type StartFailure =
   | { reason: 'not-installed'; message: string; fix: string }
   | { reason: 'spawn-failed'; message: string }
 
+/** The conversation a Claude tab continues: Claude Code's session id and its transcript file. */
+export interface SavedConversation {
+  sessionId: string
+  transcript: string
+}
+
 export interface StartRequest {
   tabId: string
   kind: TerminalKind
   cols: number
   rows: number
+  /** The tab's saved conversation, on its first start in a run only; main checks it. */
+  resume?: SavedConversation
 }
 
-export type StartResult = { ok: true; pid: number } | { ok: false; failure: StartFailure }
+export type StartResult =
+  | { ok: true; pid: number; /** Present only when the request had `resume`. */ resumed?: boolean }
+  | { ok: false; failure: StartFailure }
 
 /** How a terminal's program ended. `signal` is present only when a signal ended it. */
 export interface ExitInfo {
@@ -106,6 +116,8 @@ export interface BlueprintApi {
   onReviewUpdate(cb: (state: ReviewState) => void): () => void
   /** Which open sessions changed the same files, pushed whenever it changes. */
   onOverlaps(cb: (overlaps: Overlap[]) => void): () => void
+  /** The conversation a Claude tab is in, pushed after each start (null for a new one) and when a session first shows its transcript. */
+  onConversation(cb: (tabId: string, conversation: SavedConversation | null) => void): () => void
   /** Tells main which range the Changes pane shows and whether the Developer can see it. */
   setReviewView(view: ReviewView): void
   /** The difference of one Change, by its path relative to the Folder. */

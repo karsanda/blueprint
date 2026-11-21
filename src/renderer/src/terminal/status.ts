@@ -5,6 +5,8 @@ export interface TerminalStatus {
   state: 'starting' | 'running' | 'exited' | 'failed'
   exit?: ExitInfo
   failure?: StartFailure
+  /** A muted line beside a running terminal. */
+  notice?: 'conversation-lost'
 }
 
 interface StatusStore {

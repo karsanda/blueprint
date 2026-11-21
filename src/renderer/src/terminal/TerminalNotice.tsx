@@ -14,11 +14,28 @@ export function TerminalNotice({
   kind,
   status,
   onRestart,
+  onDismiss,
 }: {
   kind: TerminalKind
   status: TerminalStatus
   onRestart: () => void
+  onDismiss: () => void
 }) {
+  if (status.state === 'running' && status.notice === 'conversation-lost') {
+    return (
+      <div
+        role="status"
+        className="mt-1.5 flex items-center gap-3 border-t border-bp-line-soft px-1 pt-2 pb-0.5"
+      >
+        <p className="min-w-0 flex-1 text-bp-muted">
+          The last conversation could not be found, so a new one started.
+        </p>
+        <Button size="sm" onClick={onDismiss}>
+          Dismiss
+        </Button>
+      </div>
+    )
+  }
   if (status.state !== 'exited' && status.state !== 'failed') return null
   const failure = status.failure
   const program = kind === 'claude' ? 'Claude Code' : 'Shell'
