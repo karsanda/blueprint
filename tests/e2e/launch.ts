@@ -117,11 +117,13 @@ export function gitFolder(): string {
   const dir = mkdtempSync(join(tmpdir(), 'blueprint-e2e-git-'))
   writeFileSync(join(dir, 'notes.txt'), 'notes: first line\nnotes: second line\n')
   writeFileSync(join(dir, 'README.md'), '# Test Folder\n\nA Folder for review tests.\n')
+  // The Developer's global and system git config stay out of the test's own git calls.
+  const env = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' }
   const git = (...args: string[]): void => {
     execFileSync(
       'git',
       ['-c', 'user.name=t', '-c', 'user.email=t@example.invalid', '-c', 'commit.gpgsign=false', ...args],
-      { cwd: dir, stdio: 'ignore' },
+      { cwd: dir, stdio: 'ignore', env },
     )
   }
   git('init', '-q')

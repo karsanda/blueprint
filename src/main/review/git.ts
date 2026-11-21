@@ -33,12 +33,37 @@ function errorCode(error: unknown): unknown {
   return error instanceof Error && 'code' in error ? error.code : undefined
 }
 
-function run(
-  git: string,
-  args: string[],
-  cwd: string,
-  env: NodeJS.ProcessEnv = process.env,
-): Promise<string> {
+/** The empty tree. Attributes read from it are none, so no `.gitattributes` filter, driver or eol rule runs. */
+const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'
+/** Config on top of the Developer's that keeps git from writing into the repository or running their code. */
+const ISOLATING_CONFIG: [string, string][] = [
+  ['core.fsmonitor', 'false'],
+  ['core.splitIndex', 'false'],
+  ['core.hooksPath', '/dev/null'],
+  ['gc.auto', '0'],
+]
+
+/**
+ * The environment of every git command Blueprint runs. Whatever the repository's config and attributes say,
+ * git starts no daemon, writes no split index, runs no hook or filter, collects no garbage and reads
+ * pathspecs literally.
+ */
+function gitEnv(extra: Record<string, string> = {}): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    GIT_CONFIG_COUNT: String(ISOLATING_CONFIG.length),
+    GIT_ATTR_SOURCE: EMPTY_TREE,
+    GIT_LITERAL_PATHSPECS: '1',
+    ...extra,
+  }
+  ISOLATING_CONFIG.forEach(([key, value], i) => {
+    env[`GIT_CONFIG_KEY_${i}`] = key
+    env[`GIT_CONFIG_VALUE_${i}`] = value
+  })
+  return env
+}
+
+function run(git: string, args: string[], cwd: string, env: NodeJS.ProcessEnv): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(git, args, { cwd, env, encoding: 'utf8', maxBuffer: 1 << 30 }, (error, stdout) =>
       error ? reject(error) : resolve(stdout),
@@ -68,19 +93,18 @@ export class SnapshotStore {
     let objects: string
     try {
       objects = (
-        await run(git, ['rev-parse', '--path-format=absolute', '--git-path', 'objects'], folder)
+        await run(git, ['rev-parse', '--path-format=absolute', '--git-path', 'objects'], folder, gitEnv())
       ).trim()
     } catch (error) {
       return { problem: errorCode(error) === 'ENOENT' ? 'no-git' : 'not-a-repo' }
     }
     rmSync(storeDir, { recursive: true, force: true })
     mkdirSync(join(storeDir, 'objects'), { recursive: true })
-    const env = {
-      ...process.env,
+    const env = gitEnv({
       GIT_INDEX_FILE: join(storeDir, 'index'),
       GIT_OBJECT_DIRECTORY: join(storeDir, 'objects'),
       GIT_ALTERNATE_OBJECT_DIRECTORIES: objects,
-    }
+    })
     return new SnapshotStore(folder, git, env)
   }
 

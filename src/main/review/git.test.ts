@@ -1,5 +1,14 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -15,11 +24,16 @@ afterEach(() => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true })
 })
 
+/** Runs git for the test's own setup, away from the Developer's global and system config. */
 function git(repo: string, ...args: string[]): string {
   return execFileSync(
     'git',
     ['-c', 'user.name=t', '-c', 'user.email=t@example.invalid', '-c', 'commit.gpgsign=false', ...args],
-    { cwd: repo, encoding: 'utf8' },
+    {
+      cwd: repo,
+      encoding: 'utf8',
+      env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' },
+    },
   )
 }
 
@@ -129,17 +143,18 @@ describe('SnapshotStore', () => {
     ])
   })
 
-  it('diff shows the added and removed lines, whatever the git config', async () => {
+  it('diff of a path with brackets shows that file only', async () => {
     const repo = makeRepo()
-    git(repo, 'config', 'diff.external', '/bin/false')
-    git(repo, 'config', 'diff.noprefix', 'true')
     const store = await open(repo)
     const before = await store.snapshot()
-    writeFileSync(join(repo, 'a.txt'), 'ONE\ntwo\n')
+    mkdirSync(join(repo, 'app', '[id]'), { recursive: true })
+    mkdirSync(join(repo, 'app', 'i'))
+    writeFileSync(join(repo, 'app', '[id]', 'page.tsx'), 'bracketed\n')
+    writeFileSync(join(repo, 'app', 'i', 'page.tsx'), 'plain\n')
     const after = await store.snapshot()
-    const patch = await store.diff(before, after, 'a.txt')
-    expect(patch).toContain('\n-one\n')
-    expect(patch).toContain('\n+ONE\n')
+    const patch = await store.diff(before, after, 'app/[id]/page.tsx')
+    expect(patch).toContain('\n+bracketed\n')
+    expect(patch).not.toContain('plain')
   })
 
   it('snapshots run one at a time', async () => {
@@ -169,6 +184,46 @@ describe('SnapshotStore', () => {
     expect(await SnapshotStore.open(repo, temp('bp-store-'), '/nonexistent/git')).toEqual({
       problem: 'no-git',
     })
+  })
+})
+
+describe("SnapshotStore with the Developer's git config", () => {
+  it('snapshots leave .git as it was, and run no daemon, hook or filter of the repository', async () => {
+    const repo = makeRepo()
+    const marks = temp('bp-marks-')
+    writeFileSync(join(repo, '.gitattributes'), '*.txt filter=mark\n')
+    git(repo, 'add', '.gitattributes')
+    git(repo, 'commit', '-q', '-m', 'attributes')
+    git(repo, 'config', 'core.fsmonitor', 'true')
+    git(repo, 'config', 'core.splitIndex', 'true')
+    git(repo, 'config', 'filter.mark.clean', `touch '${join(marks, 'filter')}' && cat`)
+    const hook = join(repo, '.git', 'hooks', 'post-index-change')
+    writeFileSync(hook, `#!/bin/sh\ntouch '${join(marks, 'hook')}'\n`)
+    chmodSync(hook, 0o755)
+    const listing = (): string[] =>
+      readdirSync(join(repo, '.git'), { recursive: true }).map(String).toSorted()
+    const before = listing()
+    const store = await open(repo)
+    const first = await store.snapshot()
+    writeFileSync(join(repo, 'a.txt'), 'ONE\ntwo\n')
+    const second = await store.snapshot()
+    expect((await store.changes(first, second)).map((c) => c.path)).toEqual(['a.txt'])
+    expect(listing()).toEqual(before)
+    expect(existsSync(join(marks, 'filter'))).toBe(false)
+    expect(existsSync(join(marks, 'hook'))).toBe(false)
+  })
+
+  it('diff shows plain added and removed lines with an external diff tool and no prefixes set', async () => {
+    const repo = makeRepo()
+    git(repo, 'config', 'diff.external', '/bin/false')
+    git(repo, 'config', 'diff.noprefix', 'true')
+    const store = await open(repo)
+    const before = await store.snapshot()
+    writeFileSync(join(repo, 'a.txt'), 'ONE\ntwo\n')
+    const after = await store.snapshot()
+    const patch = await store.diff(before, after, 'a.txt')
+    expect(patch).toContain('\n-one\n')
+    expect(patch).toContain('\n+ONE\n')
   })
 })
 

@@ -19,11 +19,12 @@ afterEach(() => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true })
 })
 
+/** Runs git for the test's own setup, away from the Developer's global and system config. */
 function git(repo: string, ...args: string[]): void {
   execFileSync(
     'git',
     ['-c', 'user.name=t', '-c', 'user.email=t@example.invalid', '-c', 'commit.gpgsign=false', ...args],
-    { cwd: repo },
+    { cwd: repo, env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' } },
   )
 }
 
