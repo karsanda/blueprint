@@ -60,6 +60,20 @@ async function open(folder: string): Promise<SnapshotStore> {
   return store
 }
 
+/** A `git` whose `add` hangs until `release` is called, and that runs the real git otherwise. */
+function hangingGit(): { git: string; release(): void } {
+  const dir = temp('bp-fake-git-')
+  const hang = join(dir, 'hang')
+  const program = join(dir, 'git')
+  writeFileSync(hang, '')
+  writeFileSync(
+    program,
+    `#!/bin/sh\nif [ "$1" = add ] && [ -e '${hang}' ]; then exec sleep 5; fi\nexec git "$@"\n`,
+  )
+  chmodSync(program, 0o755)
+  return { git: program, release: () => rmSync(hang) }
+}
+
 function objectFiles(repo: string): string[] {
   const out: string[] = []
   const walk = (dir: string, rel: string): void => {
@@ -192,6 +206,19 @@ describe('SnapshotStore', () => {
     expect(store.busy).toBe(false)
   })
 
+  it('a git that hangs is stopped after the timeout, and frees the store for the next snapshot', async () => {
+    const repo = makeRepo()
+    const fake = hangingGit()
+    const store = await SnapshotStore.open(repo, temp('bp-store-'), { git: fake.git, timeoutMs: 200 })
+    if (!(store instanceof SnapshotStore)) throw new Error(`open failed: ${store.problem}`)
+    const started = Date.now()
+    await expect(store.snapshot()).rejects.toThrow('git add gave no answer in 200 ms')
+    expect(Date.now() - started).toBeLessThan(1000)
+    expect(store.busy).toBe(false)
+    fake.release()
+    expect(await store.snapshot()).toMatch(/^[0-9a-f]{40}$/)
+  })
+
   it('a repository with no commits works', async () => {
     const repo = temp('bp-repo-')
     git(repo, 'init', '-q')
@@ -207,7 +234,7 @@ describe('SnapshotStore', () => {
     const plain = temp('bp-plain-')
     expect(await SnapshotStore.open(plain, temp('bp-store-'))).toEqual({ problem: 'not-a-repo' })
     const repo = makeRepo()
-    expect(await SnapshotStore.open(repo, temp('bp-store-'), '/nonexistent/git')).toEqual({
+    expect(await SnapshotStore.open(repo, temp('bp-store-'), { git: '/nonexistent/git' })).toEqual({
       problem: 'no-git',
     })
   })

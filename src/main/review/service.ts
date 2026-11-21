@@ -11,6 +11,7 @@ const NO_GIT_MESSAGES: Record<GitProblem, string> = {
 }
 const NOT_STARTED = 'Changes show here once Claude starts.'
 const NO_PROMPT = 'No prompt yet. Changes show here after your first prompt.'
+const GIT_FAILED = 'Review could not read this Folder with Git. It tries again shortly.'
 const EDIT_TOOLS = new Set(['Write', 'Edit', 'NotebookEdit'])
 
 /** What Blueprint keeps for one Claude start of a tab, keyed by its start key. */
@@ -27,6 +28,7 @@ interface Session {
 export class ReviewService {
   private readonly pollMs: number
   private readonly git: string
+  private readonly timeoutMs: number | undefined
   private store: SnapshotStore | undefined
   private problem: GitProblem | undefined
   private folder: string | null = null
@@ -45,12 +47,14 @@ export class ReviewService {
   constructor(
     private readonly runDir: string,
     private readonly send: (state: ReviewState) => void,
-    opts: { pollMs?: number; git?: string } = {},
+    opts: { pollMs?: number; git?: string; timeoutMs?: number } = {},
   ) {
     this.pollMs = opts.pollMs ?? 2000
     this.git = opts.git ?? 'git'
+    this.timeoutMs = opts.timeoutMs
   }
 
+  /** Opens the review store of the Folder. The first snapshot runs after it, in the background. */
   setFolder(folder: string | null): Promise<void> {
     const open = this.opening.then(() => this.open(folder))
     this.opening = open
@@ -68,7 +72,10 @@ export class ReviewService {
     if (folder !== null) {
       try {
         const hash = createHash('sha256').update(folder).digest('hex').slice(0, 16)
-        const opened = await SnapshotStore.open(folder, join(this.runDir, hash), this.git)
+        const opened = await SnapshotStore.open(folder, join(this.runDir, hash), {
+          git: this.git,
+          timeoutMs: this.timeoutMs,
+        })
         if (opened instanceof SnapshotStore) this.store = opened
         else this.problem = opened.problem
       } catch (error) {
@@ -76,7 +83,8 @@ export class ReviewService {
         this.problem = 'not-a-repo'
       }
     }
-    await this.refresh()
+    // A slow Git holds back neither the window nor Claude's start.
+    this.background(() => this.refresh())
   }
 
   async startSession(tabId: string, startKey: string): Promise<void> {
@@ -105,7 +113,8 @@ export class ReviewService {
     } catch (error) {
       this.warn('take the session base', error)
     }
-    await this.refresh()
+    // Claude starts once the base is taken. The refresh need not hold it back.
+    this.background(() => this.refresh())
   }
 
   async hook(startKey: string, e: HookInput): Promise<void> {
@@ -158,21 +167,25 @@ export class ReviewService {
     this.background(() => this.refresh(true))
   }
 
-  /** Takes a snapshot and sends the state if it changed. Skips while another snapshot runs. */
+  /**
+   * Takes a snapshot and sends the state if it changed. Skips while another snapshot runs. When Git fails,
+   * it sends that the review could not read the Folder, until a later refresh succeeds.
+   */
   async refresh(force = false): Promise<void> {
     if (this.closed) return
+    // While another snapshot runs, the latest tree is a little old, but the range may have changed.
+    const busy = this.store?.busy ?? false
+    if (busy && !force) return
+    const generation = busy ? this.generation : ++this.generation
+    let state: ReviewState
     try {
-      if (this.store?.busy) {
-        // The latest tree is a little old, but the range may have changed.
-        if (force) await this.publish(await this.build(this.latest), this.generation, true)
-        return
-      }
-      const generation = ++this.generation
-      if (this.store) this.latest = await this.store.snapshot()
-      await this.publish(await this.build(this.latest), generation, force)
+      if (this.store && !busy) this.latest = await this.store.snapshot()
+      state = await this.build(this.latest)
     } catch (error) {
       this.warn('refresh the review', error)
+      state = { kind: 'waiting', message: GIT_FAILED }
     }
+    await this.publish(state, generation, force)
   }
 
   async diff(path: string): Promise<FileDiff> {

@@ -69,11 +69,27 @@ function gitEnv(extra: Record<string, string> = {}): NodeJS.ProcessEnv {
   return env
 }
 
-function run(git: string, args: string[], cwd: string, env: NodeJS.ProcessEnv): Promise<string> {
+/** How long a git command may take. Under the 10 s timeout of the hooks whose reply waits for a snapshot. */
+const TIMEOUT_MS = 8000
+
+function run(
+  git: string,
+  args: string[],
+  cwd: string,
+  env: NodeJS.ProcessEnv,
+  timeoutMs: number,
+): Promise<string> {
   return new Promise((resolve, reject) => {
-    execFile(git, args, { cwd, env, encoding: 'utf8', maxBuffer: 1 << 30 }, (error, stdout) =>
-      error ? reject(error) : resolve(stdout),
-    )
+    const child = execFile(git, args, { cwd, env, encoding: 'utf8', maxBuffer: 1 << 30 }, (error, stdout) => {
+      clearTimeout(timer)
+      if (error) reject(error)
+      else resolve(stdout)
+    })
+    // Gives up at once, even on a git that does not end when killed, so nothing waits on it any longer.
+    const timer = setTimeout(() => {
+      child.kill()
+      reject(new Error(`git ${args[0]} gave no answer in ${timeoutMs} ms`))
+    }, timeoutMs)
   })
 }
 
@@ -89,18 +105,19 @@ export class SnapshotStore {
     private readonly folder: string,
     private readonly git: string,
     private readonly env: NodeJS.ProcessEnv,
+    private readonly timeoutMs: number,
   ) {}
 
+  /** `git` is the git program, and `timeoutMs` how long one git command may take before it is killed. */
   static async open(
     folder: string,
     storeDir: string,
-    git = 'git',
+    { git = 'git', timeoutMs = TIMEOUT_MS }: { git?: string; timeoutMs?: number } = {},
   ): Promise<SnapshotStore | { problem: GitProblem }> {
     let objects: string
     try {
-      objects = (
-        await run(git, ['rev-parse', '--path-format=absolute', '--git-path', 'objects'], folder, gitEnv())
-      ).trim()
+      const args = ['rev-parse', '--path-format=absolute', '--git-path', 'objects']
+      objects = (await run(git, args, folder, gitEnv(), timeoutMs)).trim()
     } catch (error) {
       return { problem: errorCode(error) === 'ENOENT' ? 'no-git' : 'not-a-repo' }
     }
@@ -111,7 +128,7 @@ export class SnapshotStore {
       GIT_OBJECT_DIRECTORY: join(storeDir, 'objects'),
       GIT_ALTERNATE_OBJECT_DIRECTORIES: objects,
     })
-    return new SnapshotStore(folder, git, env)
+    return new SnapshotStore(folder, git, env, timeoutMs)
   }
 
   get busy(): boolean {
@@ -158,7 +175,7 @@ export class SnapshotStore {
   }
 
   private exec(args: string[]): Promise<string> {
-    return run(this.git, args, this.folder, this.env)
+    return run(this.git, args, this.folder, this.env, this.timeoutMs)
   }
 }
 

@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -35,6 +35,20 @@ function makeRepo(): string {
   git(repo, 'add', '-A')
   git(repo, 'commit', '-q', '-m', 'first')
   return repo
+}
+
+/** A `git` whose `add` hangs until `release` is called, and that runs the real git otherwise. */
+function hangingGit(): { git: string; release(): void } {
+  const dir = temp('bp-fake-git-')
+  const hang = join(dir, 'hang')
+  const program = join(dir, 'git')
+  writeFileSync(hang, '')
+  writeFileSync(
+    program,
+    `#!/bin/sh\nif [ "$1" = add ] && [ -e '${hang}' ]; then exec sleep 5; fi\nexec git "$@"\n`,
+  )
+  chmodSync(program, 0o755)
+  return { git: program, release: () => rmSync(hang) }
 }
 
 const KEY = 'k'
@@ -207,18 +221,51 @@ describe('ReviewService', () => {
 
   it('before the first prompt, This turn says so', async () => {
     const r = await rig()
-    expect(r.last()).toEqual({
-      kind: 'waiting',
-      message: 'No prompt yet. Changes show here after your first prompt.',
-    })
+    await vi.waitFor(() =>
+      expect(r.last()).toEqual({
+        kind: 'waiting',
+        message: 'No prompt yet. Changes show here after your first prompt.',
+      }),
+    )
+  })
+
+  it('a git that hangs holds back neither the Folder nor Claude, the review says so, and recovers', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const fake = hangingGit()
+      const states: ReviewState[] = []
+      const svc = new ReviewService(temp('bp-run-'), (s) => states.push(s), { git: fake.git, timeoutMs: 300 })
+      services.push(svc)
+      await svc.setFolder(makeRepo())
+      // The first snapshot still hangs: nothing is sent until it gives up.
+      expect(states).toEqual([])
+      await vi.waitFor(() =>
+        expect(states.at(-1)).toEqual({
+          kind: 'waiting',
+          message: 'Review could not read this Folder with Git. It tries again shortly.',
+        }),
+      )
+      fake.release()
+      await svc.startSession('claude-1', KEY)
+      await vi.waitFor(() =>
+        expect(states.at(-1)).toEqual({
+          kind: 'waiting',
+          message: 'No prompt yet. Changes show here after your first prompt.',
+        }),
+      )
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   it('a Folder outside Git explains that review needs Git, and replies at once', async () => {
     const r = await rig({ repo: temp('bp-plain-'), start: false })
-    expect(r.last()).toEqual({
-      kind: 'no-git',
-      message: 'Review needs Git. This Folder is not a Git repository.',
-    })
+    await vi.waitFor(() =>
+      expect(r.last()).toEqual({
+        kind: 'no-git',
+        message: 'Review needs Git. This Folder is not a Git repository.',
+      }),
+    )
     await r.svc.startSession('claude-1', KEY)
     await r.svc.hook(KEY, prompt())
   })
