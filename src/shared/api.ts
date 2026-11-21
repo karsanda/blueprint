@@ -116,6 +116,8 @@ export interface BlueprintApi {
   onReviewUpdate(cb: (state: ReviewState) => void): () => void
   /** Which open sessions changed the same files, pushed whenever it changes. */
   onOverlaps(cb: (overlaps: Overlap[]) => void): () => void
+  /** The conversation a Claude tab is in, pushed after each start (null for a new one) and when a session first shows its transcript. */
+  onConversation(cb: (tabId: string, conversation: SavedConversation | null) => void): () => void
   /** Tells main which range the Changes pane shows and whether the Developer can see it. */
   setReviewView(view: ReviewView): void
   /** The difference of one Change, by its path relative to the Folder. */

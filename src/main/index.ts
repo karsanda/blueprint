@@ -66,7 +66,11 @@ void app.whenReady().then(async () => {
   const send = (channel: string, ...args: unknown[]): void => {
     if (win && !win.webContents.isDestroyed()) win.webContents.send(channel, ...args)
   }
-  const relay = new StatusRelay((tabId, signal) => send('status:signal', tabId, signal))
+  const relay = new StatusRelay(
+    (tabId, signal) => send('status:signal', tabId, signal),
+    undefined,
+    (tabId, conversation) => send('claude:conversation', tabId, conversation),
+  )
   let reviewDir: ReturnType<typeof createReviewDir> | undefined
   let review: ReviewService
   let listener: HookListener | undefined
@@ -114,6 +118,7 @@ void app.whenReady().then(async () => {
     folder,
     manager,
     relay,
+    sendConversation: (tabId, conversation) => send('claude:conversation', tabId, conversation),
     review,
     // The ipc module swaps in the Folder the Developer picks, so the notifier reads it through deps.
     notifier: new NeedsYouNotifier(

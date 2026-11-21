@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import type { StatusSignal } from '../../shared/api'
+import type { SavedConversation, StatusSignal } from '../../shared/api'
 import { StatusRelay } from './relay'
 
 function setup() {
   const sent: [string, StatusSignal][] = []
   const calls: string[] = []
+  const conversations: [string, SavedConversation][] = []
   const hook = { onInterrupt: (_sessionId: string): void => undefined }
   const relay = new StatusRelay(
     (tabId, signal) => sent.push([tabId, signal]),
@@ -16,9 +17,16 @@ function setup() {
         unfollowAll: () => calls.push('unfollowAll'),
       }
     },
+    (tabId, conversation) => conversations.push([tabId, conversation]),
   )
-  return { relay, sent, calls, interrupt: (id: string) => hook.onInterrupt(id) }
+  return { relay, sent, calls, conversations, interrupt: (id: string) => hook.onInterrupt(id) }
 }
+
+const prompt = (id: string, path?: string) => ({
+  hook_event_name: 'UserPromptSubmit' as const,
+  session_id: id,
+  ...(path ? { transcript_path: path } : {}),
+})
 
 describe('StatusRelay', () => {
   it("sends a hook's signal to its start's tab", () => {
@@ -104,5 +112,37 @@ describe('StatusRelay', () => {
     const { relay, calls } = setup()
     relay.close()
     expect(calls).toEqual(['unfollowAll'])
+  })
+
+  describe('conversations', () => {
+    it("a start's first prompt reports its conversation", () => {
+      const { relay, conversations } = setup()
+      relay.register('claude-1', 'k')
+      relay.hook('k', prompt('s1', '/t/s1.jsonl'))
+      expect(conversations).toEqual([['claude-1', { sessionId: 's1', transcript: '/t/s1.jsonl' }]])
+    })
+
+    it('a later prompt in the same session reports nothing new', () => {
+      const { relay, conversations } = setup()
+      relay.register('claude-1', 'k')
+      relay.hook('k', prompt('s1', '/t/s1.jsonl'))
+      relay.hook('k', prompt('s1', '/t/s1.jsonl'))
+      expect(conversations).toHaveLength(1)
+    })
+
+    it('a prompt after /clear reports the new conversation', () => {
+      const { relay, conversations } = setup()
+      relay.register('claude-1', 'k')
+      relay.hook('k', prompt('s1', '/t/s1.jsonl'))
+      relay.hook('k', prompt('s2', '/t/s2.jsonl'))
+      expect(conversations[1]).toEqual(['claude-1', { sessionId: 's2', transcript: '/t/s2.jsonl' }])
+    })
+
+    it('a prompt with no transcript reports nothing', () => {
+      const { relay, conversations } = setup()
+      relay.register('claude-1', 'k')
+      relay.hook('k', prompt('s1'))
+      expect(conversations).toEqual([])
+    })
   })
 })

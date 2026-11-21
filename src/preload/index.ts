@@ -4,6 +4,7 @@ import type {
   ExitInfo,
   FolderState,
   Overlap,
+  SavedConversation,
   ReviewState,
   StartRequest,
   StartResult,
@@ -60,6 +61,14 @@ const api: BlueprintApi = {
     ipcRenderer.on('review:overlaps', listener)
     return () => {
       ipcRenderer.off('review:overlaps', listener)
+    }
+  },
+  onConversation: (cb) => {
+    const listener = (_e: IpcRendererEvent, tabId: string, conversation: SavedConversation | null): void =>
+      cb(tabId, conversation)
+    ipcRenderer.on('claude:conversation', listener)
+    return () => {
+      ipcRenderer.off('claude:conversation', listener)
     }
   },
   setReviewView: (view) => ipcRenderer.send('review:view', view),
