@@ -259,9 +259,10 @@
 .bp-diff-row[data-kind='hunk'] {
   color: var(--bp-muted);
 }
+/* Five digits and a 1ch gap: the box includes its padding. */
 .bp-diff-num {
   flex: none;
-  width: 3.5ch;
+  width: 6ch;
   padding-right: 1ch;
   text-align: right;
   color: var(--bp-muted);

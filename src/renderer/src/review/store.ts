@@ -20,11 +20,16 @@ export const useReview = create<ReviewStore>((set) => ({
   setRange: (range) => set({ range }),
   pick: (path) => set({ picked: path }),
   receive: (state) =>
-    set((s) => ({
-      state,
-      picked:
-        s.picked !== null && state.kind === 'changes' && state.changes.some((c) => c.path === s.picked)
-          ? s.picked
-          : null,
-    })),
+    set((s) =>
+      // A list for the range the Developer just left can still arrive. The new range's list follows it.
+      state.kind === 'changes' && state.range !== s.range
+        ? s
+        : {
+            state,
+            picked:
+              s.picked !== null && state.kind === 'changes' && state.changes.some((c) => c.path === s.picked)
+                ? s.picked
+                : null,
+          },
+    ),
 }))
