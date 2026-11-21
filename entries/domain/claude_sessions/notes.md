@@ -57,7 +57,6 @@ Checked on 2026-11-21 with a real session whose hooks logged every event:
 - Only keys the Developer types count. Focus and mouse reports that the terminal sends on its own do not, or clicking a pane would clear Needs you.
 - `PostToolUse` never clears Needs you. A parallel tool can finish while a prompt for another tool is still open.
 - The transcript format is not documented. Blueprint relies only on the interrupt text, and only on lines added after it starts following the file. The interrupt is a `user` entry whose content is a list of text parts. A prompt is stored as plain text, so a prompt with the same words does not count.
-
 - The file watcher takes its own first reading a moment after following starts. So the follower does one catch-up read after one poll interval. Without it, growth in that gap is never reported.
 
 ### Checked in the real app
