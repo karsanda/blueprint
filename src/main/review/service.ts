@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
-import { join } from 'node:path'
+import { realpathSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import type { Change, FileDiff, ReviewState, ReviewView } from '../../shared/api'
 import type { HookInput } from '../status/hooks'
 import { isClaudeCodesOwnPrompt, pathInFolder, TouchLog } from './attribution'
@@ -13,6 +14,30 @@ const NOT_STARTED = 'Changes show here once Claude starts.'
 const NO_PROMPT = 'No prompt yet. Changes show here after your first prompt.'
 const GIT_FAILED = 'Review could not read this Folder with Git. It tries again shortly.'
 const EDIT_TOOLS = new Set(['Write', 'Edit', 'NotebookEdit'])
+
+function realPath(path: string): string | undefined {
+  try {
+    return realpathSync(path)
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * The Folder paths an edit tool's file names. Claude Code runs in the Folder's real path, so the file is
+ * matched against the Folder as given and as its real path, and an existing file by its own real path too.
+ * A deleted file has no real path, and is matched as written.
+ */
+function editedPaths(folder: string, folderReal: string | undefined, file: string): Set<string> {
+  const paths = new Set<string>()
+  for (const root of [folder, folderReal]) {
+    for (const f of [file, realPath(resolve(folder, file))]) {
+      const path = root === undefined || f === undefined ? null : pathInFolder(root, f)
+      if (path !== null) paths.add(path)
+    }
+  }
+  return paths
+}
 
 /** What Blueprint keeps for one Claude start of a tab, keyed by its start key. */
 interface Session {
@@ -32,6 +57,8 @@ export class ReviewService {
   private store: SnapshotStore | undefined
   private problem: GitProblem | undefined
   private folder: string | null = null
+  /** The Folder's real path. Claude Code names files under it. */
+  private folderReal: string | undefined
   private opening: Promise<void> = Promise.resolve()
   private readonly sessions = new Map<string, Session>()
   private shownKey: string | undefined
@@ -64,6 +91,7 @@ export class ReviewService {
   private async open(folder: string | null): Promise<void> {
     this.folderEpoch++
     this.folder = folder
+    this.folderReal = folder === null ? undefined : realPath(folder)
     this.store = undefined
     this.problem = undefined
     this.latest = undefined
@@ -123,6 +151,7 @@ export class ReviewService {
       const store = this.store
       if (!session || !store || !this.folder) return
       const folder = this.folder
+      const folderReal = this.folderReal
       if (e.hook_event_name === 'UserPromptSubmit') {
         if (e.prompt !== undefined && isClaudeCodesOwnPrompt(e.prompt)) return
         session.turnBase = await store.snapshot()
@@ -135,8 +164,7 @@ export class ReviewService {
         (e.hook_event_name === 'PostToolUseFailure' && e.tool_name === 'Bash')
       ) {
         if (e.tool_name && EDIT_TOOLS.has(e.tool_name) && e.file_path) {
-          const path = pathInFolder(folder, e.file_path)
-          if (path) session.touches.touch(path)
+          for (const path of editedPaths(folder, folderReal, e.file_path)) session.touches.touch(path)
         }
         const before = e.tool_use_id ? session.before.get(e.tool_use_id) : undefined
         if (e.tool_name === 'Bash' && e.tool_use_id) session.before.delete(e.tool_use_id)

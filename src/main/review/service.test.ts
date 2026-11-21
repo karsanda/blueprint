@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -154,6 +154,26 @@ describe('ReviewService', () => {
     r.write('g.txt')
     await r.svc.hook(KEY, post(join(r.repo, 'g.txt'), { agent_id: 'sub-1' }))
     expect(await r.listed('turn', [['g.txt', true]])).toEqual([['g.txt', true]])
+  })
+
+  it("in a Folder opened through a symlink, an edit named by the real path or the link is Claude's", async () => {
+    const repo = makeRepo()
+    const link = join(temp('bp-link-'), 'folder')
+    symlinkSync(repo, link)
+    const r = await rig({ repo: link })
+    await r.svc.hook(KEY, prompt())
+    r.write('real.txt')
+    await r.svc.hook(KEY, post(join(realpathSync(repo), 'real.txt')))
+    await r.claudeWrites('link.txt')
+    expect(
+      await r.listed('turn', [
+        ['link.txt', true],
+        ['real.txt', true],
+      ]),
+    ).toEqual([
+      ['link.txt', true],
+      ['real.txt', true],
+    ])
   })
 
   it('a file changed without a hook is outside Claude', async () => {
