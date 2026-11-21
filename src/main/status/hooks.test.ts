@@ -13,7 +13,7 @@ import {
 } from './hooks'
 
 describe('hookSettings', () => {
-  it('points the five events at the listener with the token', () => {
+  it('points the six events at the listener with the token', () => {
     const { hooks } = hookSettings('http://127.0.0.1:9/hook', 'tok')
     expect(Object.keys(hooks)).toEqual([...HOOK_EVENTS])
     expect(hooks.Stop[0]).toEqual({
@@ -26,8 +26,20 @@ describe('hookSettings', () => {
         },
       ],
     })
+    expect(hooks.PreToolUse[0]).toEqual({
+      matcher: 'Bash',
+      hooks: [
+        {
+          type: 'http',
+          url: 'http://127.0.0.1:9/hook',
+          headers: { Authorization: 'Bearer tok' },
+          timeout: 10,
+        },
+      ],
+    })
+    expect(hooks.UserPromptSubmit[0]?.hooks[0]?.timeout).toBe(10)
     const withMatcher = HOOK_EVENTS.filter((e) => 'matcher' in hooks[e][0])
-    expect(withMatcher).toEqual(['PermissionRequest', 'PostToolUse'])
+    expect(withMatcher).toEqual(['PreToolUse', 'PermissionRequest', 'PostToolUse'])
     expect(hooks.PostToolUse[0].matcher).toBe('*')
     expect(hooks.PermissionRequest[0].matcher).toBe('*')
   })
@@ -36,6 +48,7 @@ describe('hookSettings', () => {
 describe('signalFromHook', () => {
   const cases: [Partial<HookInput>, StatusSignal | null][] = [
     [{ hook_event_name: 'UserPromptSubmit' }, { kind: 'prompt' }],
+    [{ hook_event_name: 'PreToolUse' }, null],
     [{ hook_event_name: 'PermissionRequest' }, { kind: 'asks' }],
     [{ hook_event_name: 'Notification', notification_type: 'permission_prompt' }, { kind: 'asks' }],
     [{ hook_event_name: 'Notification', notification_type: 'elicitation_dialog' }, { kind: 'asks' }],
