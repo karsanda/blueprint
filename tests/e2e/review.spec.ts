@@ -1,4 +1,4 @@
-import { appendFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { appendFileSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, type Page, test } from '@playwright/test'
 import type { ReviewState } from '../../src/shared/api'
@@ -246,6 +246,21 @@ test('the difference follows a file that changes again', async () => {
   await expect(diffRows(page, 'add').filter({ hasText: 'notes: third line' })).toHaveCount(1, {
     timeout: 5000,
   })
+})
+
+test('the difference follows a file that changes again with the same counts', async () => {
+  const folder = gitFolder()
+  const { page } = await launch({ folder })
+  await readyClaude(page)
+  await typeInto(page, 'claude-1', 'pe')
+  await pick(page, 'notes.txt')
+  await expect(diffRows(page, 'add')).toContainText('notes: changed by Claude')
+  const notes = join(folder, 'notes.txt')
+  writeFileSync(
+    notes,
+    readFileSync(notes, 'utf8').replace('notes: changed by Claude', 'notes: changed again'),
+  )
+  await expect(diffRows(page, 'add')).toContainText('notes: changed again', { timeout: 5000 })
 })
 
 test('a new file and a deleted file show whole, and a binary file says so', async () => {

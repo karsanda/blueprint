@@ -46,6 +46,8 @@ export interface ReviewView {
 /** A Change as the review lists it. The path is relative to the Folder, with `/`. Counts are 0 for a binary file. */
 export interface Change {
   path: string
+  /** Git's id of the file's content: the new content, or the removed content for a deleted file. */
+  id: string
   kind: 'added' | 'modified' | 'deleted'
   added: number
   removed: number

@@ -8,8 +8,11 @@ export type GitProblem = 'no-git' | 'not-a-repo'
 
 const KINDS: Record<string, GitChange['kind']> = { A: 'added', D: 'deleted', M: 'modified', T: 'modified' }
 
-/** Reads the `-z` outputs of `git diff --name-status` and `git diff --numstat`, in name-status order. */
-export function parseChanges(nameStatus: string, numstat: string): GitChange[] {
+/**
+ * Reads the `-z` outputs of `git diff --raw --no-abbrev` and `git diff --numstat`, in raw order. A Change's id
+ * is the blob of its new content, or of its removed content for a deleted file.
+ */
+export function parseChanges(raw: string, numstat: string): GitChange[] {
   const counts = new Map<string, { added: number; removed: number; binary: boolean }>()
   for (const record of numstat.split('\0')) {
     const [added, removed, ...rest] = record.split('\t')
@@ -18,13 +21,16 @@ export function parseChanges(nameStatus: string, numstat: string): GitChange[] {
     const binary = added === '-' && removed === '-'
     counts.set(path, { added: binary ? 0 : Number(added), removed: binary ? 0 : Number(removed), binary })
   }
-  const tokens = nameStatus.split('\0')
+  const tokens = raw.split('\0')
   const changes: GitChange[] = []
   for (let i = 0; i + 1 < tokens.length; i += 2) {
-    const kind = KINDS[tokens[i]]
+    // `:<old mode> <new mode> <old blob> <new blob> <status>`, then the path.
+    const [, , oldBlob, newBlob, status] = tokens[i].split(' ')
+    const kind = status === undefined ? undefined : KINDS[status]
     const path = tokens[i + 1]
-    if (!kind || !path) continue
-    changes.push({ path, kind, ...(counts.get(path) ?? { added: 0, removed: 0, binary: false }) })
+    const id = kind === 'deleted' ? oldBlob : newBlob
+    if (!kind || !path || !id) continue
+    changes.push({ path, id, kind, ...(counts.get(path) ?? { added: 0, removed: 0, binary: false }) })
   }
   return changes
 }
@@ -129,11 +135,11 @@ export class SnapshotStore {
   }
 
   async changes(base: string, now: string): Promise<GitChange[]> {
-    const [nameStatus, numstat] = await Promise.all([
-      this.exec(['diff', '--no-renames', '--relative', '-z', '--name-status', base, now]),
+    const [raw, numstat] = await Promise.all([
+      this.exec(['diff', '--no-renames', '--relative', '-z', '--raw', '--no-abbrev', base, now]),
       this.exec(['diff', '--no-renames', '--relative', '-z', '--numstat', base, now]),
     ])
-    return parseChanges(nameStatus, numstat)
+    return parseChanges(raw, numstat)
   }
 
   diff(base: string, now: string, path: string): Promise<string> {

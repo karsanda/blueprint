@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import {
   chmodSync,
   existsSync,
@@ -47,6 +48,12 @@ function makeRepo(): string {
   return repo
 }
 
+/** Git's id for a file with this content. */
+function blob(content: string | Buffer): string {
+  const bytes = Buffer.from(content)
+  return createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex')
+}
+
 async function open(folder: string): Promise<SnapshotStore> {
   const store = await SnapshotStore.open(folder, temp('bp-store-'))
   if (!(store instanceof SnapshotStore)) throw new Error(`open failed: ${store.problem}`)
@@ -75,10 +82,22 @@ describe('SnapshotStore', () => {
     rmSync(join(repo, 'b.txt'))
     const after = await store.snapshot()
     expect(await store.changes(before, after)).toEqual([
-      { path: 'a.txt', kind: 'modified', added: 1, removed: 1, binary: false },
-      { path: 'b.txt', kind: 'deleted', added: 0, removed: 2, binary: false },
-      { path: 'new.txt', kind: 'added', added: 1, removed: 0, binary: false },
+      { path: 'a.txt', id: blob('ONE\ntwo\n'), kind: 'modified', added: 1, removed: 1, binary: false },
+      { path: 'b.txt', id: blob('alpha\nbeta\n'), kind: 'deleted', added: 0, removed: 2, binary: false },
+      { path: 'new.txt', id: blob('x\n'), kind: 'added', added: 1, removed: 0, binary: false },
     ])
+  })
+
+  it('a file that changes again with the same counts gets a new id', async () => {
+    const repo = makeRepo()
+    const store = await open(repo)
+    const base = await store.snapshot()
+    writeFileSync(join(repo, 'a.txt'), 'foo\ntwo\n')
+    const first = (await store.changes(base, await store.snapshot()))[0]
+    writeFileSync(join(repo, 'a.txt'), 'bar\ntwo\n')
+    const second = (await store.changes(base, await store.snapshot()))[0]
+    expect(second).toMatchObject({ path: 'a.txt', added: 1, removed: 1, id: blob('bar\ntwo\n') })
+    expect(second?.id).not.toBe(first?.id)
   })
 
   it('writes nothing into the repository', async () => {
@@ -139,7 +158,14 @@ describe('SnapshotStore', () => {
     writeFileSync(join(repo, 'bin.dat'), Buffer.from([0, 1, 2, 0, 3]))
     const after = await store.snapshot()
     expect(await store.changes(before, after)).toEqual([
-      { path: 'bin.dat', kind: 'added', added: 0, removed: 0, binary: true },
+      {
+        path: 'bin.dat',
+        id: blob(Buffer.from([0, 1, 2, 0, 3])),
+        kind: 'added',
+        added: 0,
+        removed: 0,
+        binary: true,
+      },
     ])
   })
 
@@ -228,10 +254,22 @@ describe("SnapshotStore with the Developer's git config", () => {
 })
 
 describe('parseChanges', () => {
-  it('reads the -z outputs', () => {
-    expect(parseChanges('M\0a.txt\0A\0b c.txt\0', '1\t1\ta.txt\0-\t-\tb c.txt\0')).toEqual([
-      { path: 'a.txt', kind: 'modified', added: 1, removed: 1, binary: false },
-      { path: 'b c.txt', kind: 'added', added: 0, removed: 0, binary: true },
+  it('reads the -z outputs, with the new blob as the id, or the old one for a deleted file', () => {
+    const [old, now, none] = ['a', 'b', '0'].map((c) => c.repeat(40))
+    const raw = [
+      `:100644 100644 ${old} ${now} M`,
+      'a.txt',
+      `:000000 100644 ${none} ${now} A`,
+      'b c.txt',
+      `:100644 000000 ${old} ${none} D`,
+      'gone.txt',
+      '',
+    ].join('\0')
+    const numstat = ['1\t1\ta.txt', '-\t-\tb c.txt', '0\t3\tgone.txt', ''].join('\0')
+    expect(parseChanges(raw, numstat)).toEqual([
+      { path: 'a.txt', id: now, kind: 'modified', added: 1, removed: 1, binary: false },
+      { path: 'b c.txt', id: now, kind: 'added', added: 0, removed: 0, binary: true },
+      { path: 'gone.txt', id: old, kind: 'deleted', added: 0, removed: 3, binary: false },
     ])
   })
 })
