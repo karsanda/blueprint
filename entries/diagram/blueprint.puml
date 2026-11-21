@@ -1,0 +1,48 @@
+@startuml blueprint
+' Every Blueprint use case, the actors in each, and the System boundary.
+' The text entries are the source; this diagram only shows how they fit together.
+' View it with the PlantUML extension in VS Code, or render it with `plantuml -tsvg`.
+' Smetana layout needs no Graphviz. SVGs are not committed.
+!pragma layout smetana
+left to right direction
+skinparam shadowing false
+skinparam monochrome true
+
+actor Developer [[../actors/developer.md]]
+
+rectangle Blueprint [[../system/blueprint.md]] {
+  usecase "Run several Claude sessions" as Several [[../usecase/blueprint/run_several_claude_sessions.md]]
+  usecase "Talk to Claude in a pane" as Talk [[../usecase/blueprint/talk_to_claude_in_a_pane.md]]
+  usecase "Give Claude a use case as context" as GiveUseCase [[../usecase/blueprint/give_claude_a_use_case.md]]
+  usecase "Know when Claude needs me" as Know [[../usecase/blueprint/know_when_claude_needs_me.md]]
+  usecase "Run commands in a shell pane" as Shell [[../usecase/blueprint/run_commands_in_a_shell_pane.md]]
+  usecase "Arrange my panes" as Arrange [[../usecase/blueprint/arrange_my_panes.md]]
+  usecase "Review what Claude changed" as Review [[../usecase/blueprint/review_what_claude_changed.md]]
+}
+
+actor "Claude Code" as ClaudeCode
+actor "Operating system" as OS
+actor Git
+
+Developer --> Several
+Developer --> Talk
+Developer --> GiveUseCase
+Developer --> Know
+Developer --> Shell
+Developer --> Arrange
+Developer --> Review
+
+Several ..> Talk : <<include>>
+
+Several -- ClaudeCode
+Talk -- ClaudeCode
+GiveUseCase -- ClaudeCode
+Know -- ClaudeCode
+Know -- OS
+Shell -- OS
+Review -- Git
+
+' Hidden links fix the supporting actors' order, so no lines cross.
+ClaudeCode -[hidden]- OS
+OS -[hidden]- Git
+@enduml

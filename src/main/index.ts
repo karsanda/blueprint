@@ -1,7 +1,11 @@
-import { join } from 'node:path'
-import { app, BrowserWindow, Menu, shell } from 'electron'
+import { basename, join } from 'node:path'
+import { app, BrowserWindow, dialog, Menu, shell } from 'electron'
 import { resolveFolder } from './folder'
-import { registerIpc } from './ipc'
+import { type IpcDeps, registerIpc } from './ipc'
+import { NeedsYouNotifier } from './notify'
+import { createHookDir, hookSettings, writeHookSettings } from './status/hooks'
+import { type HookListener, startHookListener } from './status/listener'
+import { StatusRelay } from './status/relay'
 import { TerminalManager } from './terminal/manager'
 
 function createWindow(): BrowserWindow {
@@ -45,23 +49,61 @@ function createWindow(): BrowserWindow {
 // No app menu: its shortcuts (Ctrl+W closes, Ctrl+R reloads) would take keys from the terminals.
 Menu.setApplicationMenu(null)
 
-void app.whenReady().then(() => {
+void app.whenReady().then(async () => {
   const folder = resolveFolder(process.argv, { packaged: app.isPackaged, cwd: process.cwd() })
-  const win = createWindow()
+  // The window is created after the listener and settings file exist, so every handler is
+  // there before the renderer loads.
+  let win: BrowserWindow | undefined
   const send = (channel: string, ...args: unknown[]): void => {
-    if (!win.webContents.isDestroyed()) win.webContents.send(channel, ...args)
+    if (win && !win.webContents.isDestroyed()) win.webContents.send(channel, ...args)
   }
+  const relay = new StatusRelay((tabId, signal) => send('status:signal', tabId, signal))
+  let listener: HookListener
+  let hookDir: ReturnType<typeof createHookDir>
+  try {
+    listener = await startHookListener((startKey, e) => relay.hook(startKey, e))
+    hookDir = createHookDir()
+  } catch (err) {
+    // A window without status would show Idle while Claude waits, which is worse than no window.
+    dialog.showErrorBox('Blueprint could not start', err instanceof Error ? err.message : String(err))
+    app.quit()
+    return
+  }
+  win = createWindow()
   const manager = new TerminalManager({
     data: (tabId, data) => send('terminal:data', tabId, data),
     exit: (tabId, exit) => send('terminal:exit', tabId, exit),
   })
-  registerIpc(win, { folder, manager })
+  const deps: IpcDeps = {
+    folder,
+    manager,
+    relay,
+    // The ipc module swaps in the Folder the Developer picks, so the notifier reads it through deps.
+    notifier: new NeedsYouNotifier(
+      win,
+      () => basename(deps.folder.folder ?? ''),
+      (tabId) => send('status:focus', tabId),
+    ),
+    hookSettingsFor: (startKey) =>
+      writeHookSettings(hookDir.dir, startKey, hookSettings(`${listener.url}/${startKey}`, listener.token)),
+  }
+  registerIpc(win, deps)
+  // Both events fire on quit, so the cleanup runs once.
+  let cleaned = false
+  const cleanUp = (): void => {
+    manager.killAll()
+    if (cleaned) return
+    cleaned = true
+    void listener.close()
+    relay.close()
+    hookDir.remove()
+  }
   // No terminal outlives the window: quitting ends every Claude session and shell.
   app.on('window-all-closed', () => {
-    manager.killAll()
+    cleanUp()
     app.quit()
   })
-  app.on('before-quit', () => manager.killAll())
+  app.on('before-quit', cleanUp)
 })
 
 function isWebUrl(url: string): boolean {

@@ -26,6 +26,17 @@ export interface ExitInfo {
   signal?: number
 }
 
+export type ClaudeStatus = 'idle' | 'working' | 'needs-you'
+
+/** What Blueprint learned about a Claude session. The renderer folds it into a ClaudeStatus. */
+export type StatusSignal =
+  | { kind: 'prompt' } // UserPromptSubmit
+  | { kind: 'asks' } // PermissionRequest, or Notification permission_prompt / elicitation_dialog
+  | { kind: 'tool-done' } // PostToolUse
+  | { kind: 'stop' } // Stop
+  | { kind: 'interrupted' } // the transcript gained an interrupt line
+  | { kind: 'typed' } // the Developer typed a key in the pane (renderer only)
+
 /** The API the preload script exposes to the renderer as `window.blueprint`. */
 export interface BlueprintApi {
   /** True when e2e tests run the app (BLUEPRINT_E2E=1). */
@@ -37,5 +48,11 @@ export interface BlueprintApi {
   resize(tabId: string, cols: number, rows: number): void
   onData(tabId: string, cb: (data: string) => void): () => void
   onExit(tabId: string, cb: (exit: ExitInfo) => void): () => void
+  /** Every status signal main learned about any Claude session, with the tab it belongs to. */
+  onStatusSignal(cb: (tabId: string, signal: StatusSignal) => void): () => void
   writeClipboard(text: string): void
+  /** Asks for a desktop notification that a session needs the Developer. */
+  notify(tabId: string, tabTitle: string): void
+  /** Main asks to bring a session forward, after the Developer clicked its notification. */
+  onFocusTab(cb: (tabId: string) => void): () => void
 }

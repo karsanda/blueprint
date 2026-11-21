@@ -85,3 +85,46 @@
   border-left: 0;
   border-right: 1px solid var(--bp-muted);
 }
+
+/* The status label beside the dimension line, and the frame that says Needs you. */
+.bp-status {
+  margin-left: 6px;
+  padding: 0 4px;
+  font: 600 9.5px var(--bp-font-ui);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--bp-muted);
+}
+[data-status='working'] .bp-status {
+  color: var(--bp-agent);
+}
+[data-tab][data-status='needs-you'] {
+  box-shadow: inset 0 0 0 1px var(--bp-wait);
+}
+[data-status='needs-you'] .bp-status {
+  color: var(--bp-on-agent);
+  background: var(--bp-wait);
+}
+
+/* The status light on a Claude tab: a 7px square before the title. */
+.bp-tab {
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+.bp-light {
+  flex: none;
+  box-sizing: border-box;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+}
+.bp-light[data-status='needs-you'] {
+  background: var(--bp-wait);
+}
+.bp-light[data-status='working'] {
+  background: var(--bp-agent);
+}
+.bp-light[data-status='idle'] {
+  border: 1px solid var(--bp-muted);
+}

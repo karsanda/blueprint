@@ -6,6 +6,9 @@ import {
   type DockviewTheme,
   type IDockviewPanelHeaderProps,
 } from 'dockview-react'
+import { StatusLight } from '../status/StatusLight'
+import { installNotifications } from '../status/notify'
+import { installTitle } from '../status/title'
 import { TerminalPanel } from '../terminal/TerminalPanel'
 import { addDefaultPanels } from './defaultLayout'
 import { ZoomAction } from './ZoomAction'
@@ -18,7 +21,12 @@ const components = { terminal: TerminalPanel }
  * running with no way back; closing comes with the slices that can open new tabs.
  */
 function BlueprintTab(props: IDockviewPanelHeaderProps) {
-  return <DockviewDefaultTab {...props} hideClose />
+  return (
+    <div className="bp-tab">
+      <StatusLight tabId={props.api.id} />
+      <DockviewDefaultTab {...props} hideClose />
+    </div>
+  )
 }
 
 export function Workspace() {
@@ -29,7 +37,11 @@ export function Workspace() {
       theme={blueprintTheme}
       rightHeaderActionsComponent={ZoomAction}
       defaultTabComponent={BlueprintTab}
-      onReady={(e) => addDefaultPanels(e.api)}
+      onReady={(e) => {
+        addDefaultPanels(e.api)
+        installTitle(e.api)
+        installNotifications(e.api)
+      }}
     />
   )
 }

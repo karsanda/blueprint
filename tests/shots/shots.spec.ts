@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { launch, probeText } from '../e2e/launch'
+import { launch, probeText, typeInto } from '../e2e/launch'
 
 test('build step 1 screens', async () => {
   const { app, page } = await launch()
@@ -16,4 +16,16 @@ test('build step 1 screens', async () => {
   await expect(missing.page.getByRole('button', { name: 'Restart' })).toBeVisible()
   await missing.page.screenshot({ path: '.shots/step-1-not-installed.png' })
   await missing.app.close()
+})
+
+test('build step 2 screens', async () => {
+  const { app, page } = await launch()
+  await expect.poll(() => probeText(page, 'claude-1')).toContain('claude ready')
+  await typeInto(page, 'claude-1', 'p')
+  await expect(page.locator('[data-tab="claude-1"]')).toHaveAttribute('data-status', 'working')
+  await page.screenshot({ path: '.shots/step-2-working.png' })
+  await typeInto(page, 'claude-1', '?')
+  await expect(page.locator('[data-tab="claude-1"]')).toHaveAttribute('data-status', 'needs-you')
+  await page.screenshot({ path: '.shots/step-2-needs-you.png' })
+  await app.close()
 })

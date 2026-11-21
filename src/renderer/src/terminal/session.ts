@@ -4,9 +4,21 @@ import { LigaturesAddon } from '@xterm/addon-ligatures'
 import { WebglAddon } from '@xterm/addon-webgl'
 import { Terminal } from '@xterm/xterm'
 import type { TerminalKind } from '../../../shared/api'
+import { useClaudeStatus } from '../status/store'
 import { xtermTheme } from '../theme/xterm'
 import { terminalKeyAction } from './keys'
 import { useTerminalStatus } from './status'
+
+const NAVIGATION_KEYS = new Set([
+  'ArrowUp',
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+  'PageUp',
+  'PageDown',
+  'Home',
+  'End',
+])
 
 /**
  * One tab's terminal: the xterm.js view and its program in the main process. A session lives
@@ -44,12 +56,20 @@ export class TerminalSession {
       // which adds bracketed-paste marks when the program asks. Handling it here would paste twice.
       return action === null
     })
+    // onKey, not onData: onData also carries focus reports, mouse reports and the terminal's answers.
+    if (kind === 'claude') {
+      this.term.onKey(({ domEvent }) => {
+        // These keys move through a prompt's options without answering it.
+        if (!NAVIGATION_KEYS.has(domEvent.key)) useClaudeStatus.getState().apply(tabId, { kind: 'typed' })
+      })
+    }
     this.term.onData((data) => window.blueprint.write(tabId, data))
     this.term.onResize(({ cols, rows }) => window.blueprint.resize(tabId, cols, rows))
     window.blueprint.onData(tabId, (data) => this.term.write(data))
-    window.blueprint.onExit(tabId, (exit) =>
-      useTerminalStatus.getState().set(tabId, { state: 'exited', exit }),
-    )
+    window.blueprint.onExit(tabId, (exit) => {
+      useTerminalStatus.getState().set(tabId, { state: 'exited', exit })
+      if (kind === 'claude') useClaudeStatus.getState().set(tabId, undefined)
+    })
   }
 
   /** Shows the terminal in `el`, and starts its program the first time. */
@@ -85,6 +105,7 @@ export class TerminalSession {
   private async start(): Promise<void> {
     const status = useTerminalStatus.getState()
     status.set(this.tabId, { state: 'starting' })
+    if (this.kind === 'claude') useClaudeStatus.getState().set(this.tabId, undefined)
     this.fitToHost()
     const { cols, rows } = this.term
     const result = await window.blueprint.startTerminal({ tabId: this.tabId, kind: this.kind, cols, rows })
@@ -93,6 +114,7 @@ export class TerminalSession {
       return
     }
     status.set(this.tabId, { state: 'running' })
+    if (this.kind === 'claude') useClaudeStatus.getState().set(this.tabId, 'idle')
     // The pane may have changed size while the program was starting.
     if (this.term.cols !== cols || this.term.rows !== rows) {
       window.blueprint.resize(this.tabId, this.term.cols, this.term.rows)

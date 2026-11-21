@@ -33,16 +33,21 @@ At step 3, the Operating system blocks notifications. The marks from step 2 stil
 
 At step 2, more than one session waits. The title bar lists each one, and each tab shows its own mark.
 
+## Alternative Flow 4: The Developer refuses or stops Claude Code
+
+At step 6 or step 8, the Developer refuses the request or stops Claude Code. Claude Code ends its turn early. System marks the session as idle.
+
 ## Slice 1: Status and notification
 
-Covers: Basic Flow, Alternative Flow 1, Alternative Flow 2, Alternative Flow 3.
+Covers: Basic Flow, Alternative Flow 1, Alternative Flow 2, Alternative Flow 3, Alternative Flow 4.
 
 Work items:
 
-- [ ] Learn each session's status from Claude Code
-- [ ] Mark the tab, the pane and the title bar
-- [ ] Notify through the Operating system when the window is not in front
-- [ ] Focus the session when the Developer clicks the notification
+- [x] Learn each session's status from Claude Code
+- [x] Mark the tab, the pane and the title bar
+- [x] Notify through the Operating system when the window is not in front
+- [x] Focus the session when the Developer clicks the notification
+- [x] Mark the session idle when the Developer refuses or stops Claude Code
 
 Test cases:
 
@@ -51,6 +56,12 @@ Test cases:
 - Given a notification, when the Developer clicks it, then the window comes forward with that session focused.
 - Given a session that needs the Developer, when the Developer answers, then it shows as working.
 - Given a working session, when Claude Code finishes its turn, then it shows as idle.
+- Given a session mid-turn, when the Developer refuses or stops Claude Code, then it shows as idle.
+
+## Known gaps
+
+- Claude Code sometimes asks a question in plain text. That ends its turn, so the session shows as idle, not Needs you.
+- Claude Code may first ask the Developer to trust the Folder or to sign in. The session shows as idle meanwhile.
 
 ## Resources
 

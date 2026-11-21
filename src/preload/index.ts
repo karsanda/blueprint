@@ -1,5 +1,12 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
-import type { BlueprintApi, ExitInfo, FolderState, StartRequest, StartResult } from '../shared/api'
+import type {
+  BlueprintApi,
+  ExitInfo,
+  FolderState,
+  StartRequest,
+  StartResult,
+  StatusSignal,
+} from '../shared/api'
 
 /** Subscribes to a main-to-renderer channel whose first argument is a tab id. */
 // oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- T names the channel's payload at each call site
@@ -22,7 +29,22 @@ const api: BlueprintApi = {
   resize: (tabId, cols, rows) => ipcRenderer.send('terminal:resize', tabId, cols, rows),
   onData: (tabId, cb) => onTab<string>('terminal:data', tabId, cb),
   onExit: (tabId, cb) => onTab<ExitInfo>('terminal:exit', tabId, cb),
+  onStatusSignal: (cb) => {
+    const listener = (_e: IpcRendererEvent, tabId: string, signal: StatusSignal): void => cb(tabId, signal)
+    ipcRenderer.on('status:signal', listener)
+    return () => {
+      ipcRenderer.off('status:signal', listener)
+    }
+  },
   writeClipboard: (text) => ipcRenderer.send('clipboard:write', text),
+  notify: (tabId, tabTitle) => ipcRenderer.send('status:notify', tabId, tabTitle),
+  onFocusTab: (cb) => {
+    const listener = (_e: IpcRendererEvent, tabId: string): void => cb(tabId)
+    ipcRenderer.on('status:focus', listener)
+    return () => {
+      ipcRenderer.off('status:focus', listener)
+    }
+  },
 }
 
 contextBridge.exposeInMainWorld('blueprint', api)

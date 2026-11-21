@@ -48,7 +48,7 @@ The format and both guides are adapted from the team's `vidio-usecase` repositor
 - A slice's test cases become Playwright tests in `tests/e2e/`, each named after its Given / when / then line, run against the built app. Fake `claude` and shell programs in `tests/e2e/fixtures/` record what they receive. Tests read terminals through the e2e probe (`src/shared/probe.ts`), because WebGL draws them on a canvas.
 - Pure logic gets Vitest tests beside the source, as `*.test.ts`.
 - `pnpm dev -- <folder>` opens Blueprint on a Folder: the `--` hands the path to Electron.
-- `pnpm e2e` opens real windows on the desktop, one test at a time, and restores the clipboard it uses.
+- `pnpm e2e` runs the app on Chromium's headless display, one test at a time, so no window or desktop notification reaches the desktop. `BLUEPRINT_E2E_HEADED=1 pnpm e2e` shows the windows. The clipboard test restores the clipboard it uses.
 - If `pnpm install` leaves Electron without its binary, run `node node_modules/electron/install.js`.
 
 ## Shared conventions
