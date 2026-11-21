@@ -67,8 +67,8 @@ void app.whenReady().then(async () => {
   try {
     reviewDir = createReviewDir(app.getPath('userData'))
     review = new ReviewService(reviewDir.dir, (state) => send('review:update', state))
-    // Waits only for the review store to open. The first snapshot runs in the background, so a slow Git
-    // does not hold back the window.
+    // Waits only for the review store to open, at most 8 seconds. The first snapshot runs in the background,
+    // so a slow Git does not hold back the window.
     await review.setFolder(folder.folder)
     listener = await startHookListener((startKey, e) => {
       // The status goes out first: the review may hold the reply while it takes a snapshot.

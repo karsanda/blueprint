@@ -73,8 +73,18 @@ function gitEnv(extra: Record<string, string> = {}): NodeJS.ProcessEnv {
   return env
 }
 
-/** How long a git command may take. Under the 10 s timeout of the hooks whose reply waits for a snapshot. */
-const TIMEOUT_MS = 8000
+/**
+ * How long a store command may run before it is killed. Only a hung git takes this long: how long Claude and
+ * the hooks wait for a snapshot is bounded on its own, in ReviewService, and a slow snapshot may finish.
+ */
+const TIMEOUT_MS = 300_000
+/** How long `rev-parse` may take when a store opens. It reads no working files, and the window waits for it. */
+const OPEN_TIMEOUT_MS = 8000
+
+/** A git command that gave no answer in time, and was killed. */
+export class GitTimeout extends Error {
+  override name = 'GitTimeout'
+}
 
 function run(
   git: string,
@@ -93,7 +103,7 @@ function run(
     const timer = setTimeout(() => {
       child.kill()
       const command = args.find((arg) => !arg.startsWith('-'))
-      reject(new Error(`git ${command} gave no answer in ${timeoutMs} ms`))
+      reject(new GitTimeout(`git ${command} gave no answer in ${timeoutMs} ms`))
     }, timeoutMs)
   })
 }
@@ -113,17 +123,26 @@ export class SnapshotStore {
     private readonly timeoutMs: number,
   ) {}
 
-  /** `git` is the git program, and `timeoutMs` how long one git command may take before it is killed. */
+  /**
+   * `git` is the git program. `timeoutMs` is how long a store command may run before it is killed, and
+   * `openTimeoutMs` the same for `rev-parse`. A `rev-parse` that gives no answer rejects with GitTimeout: it
+   * says nothing about the Folder.
+   */
   static async open(
     folder: string,
     storeDir: string,
-    { git = 'git', timeoutMs = TIMEOUT_MS }: { git?: string; timeoutMs?: number } = {},
+    {
+      git = 'git',
+      timeoutMs = TIMEOUT_MS,
+      openTimeoutMs = OPEN_TIMEOUT_MS,
+    }: { git?: string; timeoutMs?: number; openTimeoutMs?: number } = {},
   ): Promise<SnapshotStore | { problem: GitProblem }> {
     let objects: string
     try {
       const args = ['rev-parse', '--path-format=absolute', '--git-path', 'objects']
-      objects = (await run(git, args, folder, gitEnv(), timeoutMs)).trim()
+      objects = (await run(git, args, folder, gitEnv(), openTimeoutMs)).trim()
     } catch (error) {
+      if (error instanceof GitTimeout) throw error
       return { problem: errorCode(error) === 'ENOENT' ? 'no-git' : 'not-a-repo' }
     }
     rmSync(storeDir, { recursive: true, force: true })

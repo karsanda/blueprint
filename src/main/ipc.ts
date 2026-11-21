@@ -72,7 +72,7 @@ async function startTerminal(deps: IpcDeps, req: StartRequest): Promise<StartRes
   if (req.kind === 'claude') {
     deps.relay.register(req.tabId, startKey)
     try {
-      // The session base comes before Claude's first edit. Git's timeout bounds the wait.
+      // The session base comes before Claude's first edit, unless Git takes longer than the 8-second wait.
       await deps.review.startSession(req.tabId, startKey)
     } catch (err) {
       // Claude is worth more than its review: start it without one.

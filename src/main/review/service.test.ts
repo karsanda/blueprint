@@ -37,18 +37,63 @@ function makeRepo(): string {
   return repo
 }
 
-/** A `git` whose `add` hangs until `release` is called, and that runs the real git otherwise. */
-function hangingGit(): { git: string; release(): void } {
+/** How long an `add` of the slow fake git sleeps after it ran. Longer than WAIT_MS, far under KILL_MS. */
+const SLOW_MS = 800
+const WAIT_MS = 200
+const KILL_MS = 5000
+
+interface FakeGit {
+  git: string
+  /**
+   * `hangs`: that many next adds hang. `slow`: every add sleeps SLOW_MS after it ran, so it reads the Folder
+   * at once but ends late. `hangOpen`: rev-parse hangs.
+   */
+  set(switches: { hangs?: number; slow?: boolean; hangOpen?: boolean }): void
+}
+
+/** A `git` that runs the real git, slowed or hung by its switches. */
+function fakeGit(): FakeGit {
   const dir = temp('bp-fake-git-')
-  const hang = join(dir, 'hang')
   const program = join(dir, 'git')
-  writeFileSync(hang, '')
   writeFileSync(
     program,
-    `#!/bin/sh\nif [ "$1" = add ] && [ -e '${hang}' ]; then exec sleep 5; fi\nexec git "$@"\n`,
+    [
+      '#!/bin/sh',
+      `d='${dir}'`,
+      'if [ "$1" = rev-parse ] && [ -e "$d/hang-open" ]; then exec sleep 5; fi',
+      'if [ "$1" = add ]; then',
+      '  n=$(cat "$d/hangs" 2>/dev/null || echo 0)',
+      '  if [ "$n" -gt 0 ]; then echo $((n - 1)) >"$d/hangs"; exec sleep 5; fi',
+      `  if [ -e "$d/slow" ]; then git "$@"; s=$?; sleep ${SLOW_MS / 1000}; exit $s; fi`,
+      'fi',
+      'exec git "$@"',
+      '',
+    ].join('\n'),
   )
   chmodSync(program, 0o755)
-  return { git: program, release: () => rmSync(hang) }
+  const flag = (name: string, on: boolean): void => {
+    if (on) writeFileSync(join(dir, name), '')
+    else rmSync(join(dir, name), { force: true })
+  }
+  return {
+    git: program,
+    set({ hangs, slow, hangOpen }) {
+      if (hangs !== undefined) writeFileSync(join(dir, 'hangs'), String(hangs))
+      if (slow !== undefined) flag('slow', slow)
+      if (hangOpen !== undefined) flag('hang-open', hangOpen)
+    },
+  }
+}
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
+const READING: ReviewState = { kind: 'waiting', message: 'Review is reading this Folder with Git.' }
+const GIT_FAILED: ReviewState = {
+  kind: 'waiting',
+  message: 'Review could not read this Folder with Git. It tries again shortly.',
+}
+const NO_PROMPT: ReviewState = {
+  kind: 'waiting',
+  message: 'No prompt yet. Changes show here after your first prompt.',
 }
 
 const KEY = 'k'
@@ -76,18 +121,28 @@ interface Rig {
   write(name: string, text?: string): void
   claudeWrites(name: string, text?: string): Promise<void>
   /** Waits for the shown list to be these paths and marks, refreshing as it waits. */
-  listed(range: ReviewRange, expected: [string, boolean][]): Promise<[string, boolean][]>
+  listed(range: ReviewRange, expected: [string, boolean][], timeout?: number): Promise<[string, boolean][]>
 }
 
-async function rig(opts: { start?: boolean; repo?: string } = {}): Promise<Rig> {
-  const repo = opts.repo ?? makeRepo()
+interface RigOptions {
+  start?: boolean
+  repo?: string
+  git?: string
+  waitMs?: number
+  timeoutMs?: number
+  openTimeoutMs?: number
+}
+
+async function rig({ start, repo: given, ...opts }: RigOptions = {}): Promise<Rig> {
+  const repo = given ?? makeRepo()
   const states: ReviewState[] = []
   const svc = new ReviewService(temp('bp-run-'), (s) => states.push(s), {
     pollMs: 50,
+    ...opts,
   })
   services.push(svc)
   await svc.setFolder(repo)
-  if (opts.start !== false) await svc.startSession('claude-1', KEY)
+  if (start !== false) await svc.startSession('claude-1', KEY)
   const write = (name: string, text = 'x\n') => writeFileSync(join(repo, name), text)
   return {
     repo,
@@ -99,13 +154,16 @@ async function rig(opts: { start?: boolean; repo?: string } = {}): Promise<Rig> 
       write(name, text)
       await svc.hook(KEY, post(join(repo, name)))
     },
-    async listed(range, expected) {
+    async listed(range, expected, timeout) {
       svc.setView({ range, visible: false })
-      await vi.waitFor(async () => {
-        await svc.refresh()
-        const state = states[states.length - 1]
-        expect(state?.kind === 'changes' && mark(state.changes)).toEqual(expected)
-      })
+      await vi.waitFor(
+        async () => {
+          await svc.refresh()
+          const state = states[states.length - 1]
+          expect(state?.kind === 'changes' && mark(state.changes)).toEqual(expected)
+        },
+        { timeout },
+      )
       const state = states[states.length - 1]
       return state?.kind === 'changes' ? mark(state.changes) : []
     },
@@ -249,34 +307,111 @@ describe('ReviewService', () => {
     )
   })
 
-  it('a git that hangs holds back neither the Folder nor Claude, the review says so, and recovers', async () => {
+  it('a git slower than the wait bound holds Claude back only up to it, says it is reading, and the review works once the snapshot lands', async () => {
+    const fake = fakeGit()
+    fake.set({ slow: true })
+    const r = await rig({ start: false, git: fake.git, waitMs: WAIT_MS, timeoutMs: KILL_MS })
+    let started = Date.now()
+    await r.svc.startSession('claude-1', KEY)
+    expect(Date.now() - started).toBeGreaterThanOrEqual(WAIT_MS - 5)
+    expect(Date.now() - started).toBeLessThan(SLOW_MS)
+    started = Date.now()
+    await r.svc.hook(KEY, prompt())
+    expect(Date.now() - started).toBeGreaterThanOrEqual(WAIT_MS - 5)
+    expect(Date.now() - started).toBeLessThan(SLOW_MS)
+    expect(r.last()).toEqual(READING)
+    await vi.waitFor(() => expect(r.last()).toEqual({ kind: 'changes', range: 'turn', changes: [] }), {
+      timeout: 10_000,
+    })
+    await r.claudeWrites('c.txt')
+    expect(await r.listed('turn', [['c.txt', true]], 10_000)).toEqual([['c.txt', true]])
+  }, 30_000)
+
+  it("with a git slower than the wait bound, a file Claude's shell command writes is still Claude's", async () => {
+    const fake = fakeGit()
+    fake.set({ slow: true })
+    const r = await rig({ start: false, git: fake.git, waitMs: WAIT_MS, timeoutMs: KILL_MS })
+    await r.svc.startSession('claude-1', KEY)
+    await r.svc.hook(KEY, prompt())
+    // The turn base has landed, and Git is idle.
+    await vi.waitFor(() => expect(r.last()).toEqual({ kind: 'changes', range: 'turn', changes: [] }), {
+      timeout: 10_000,
+    })
+    const bash = { tool_name: 'Bash', tool_use_id: 't1', session_id: 's1' }
+    const started = Date.now()
+    await r.svc.hook(KEY, { hook_event_name: 'PreToolUse', ...bash })
+    expect(Date.now() - started).toBeLessThan(SLOW_MS)
+    // The snapshot before the command has read the Folder, but is still running when the command ends.
+    r.write('e.txt')
+    await r.svc.hook(KEY, { hook_event_name: 'PostToolUse', ...bash })
+    expect(await r.listed('turn', [['e.txt', true]], 10_000)).toEqual([['e.txt', true]])
+  }, 30_000)
+
+  it('what Claude touches while the turn base is still read belongs to the new turn', async () => {
+    const fake = fakeGit()
+    const r = await rig({ git: fake.git, waitMs: WAIT_MS, timeoutMs: KILL_MS })
+    // Lets the session's own snapshots finish before git turns slow.
+    await sleep(300)
+    fake.set({ slow: true })
+    await r.svc.hook(KEY, prompt())
+    await r.claudeWrites('b.txt')
+    expect(await r.listed('turn', [['b.txt', true]], 10_000)).toEqual([['b.txt', true]])
+  }, 30_000)
+
+  it('a git that hangs past the kill limit says so, and the review recovers, its base taken again', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     try {
-      const fake = hangingGit()
-      const states: ReviewState[] = []
-      const svc = new ReviewService(temp('bp-run-'), (s) => states.push(s), { git: fake.git, timeoutMs: 300 })
-      services.push(svc)
-      await svc.setFolder(makeRepo())
-      // The first snapshot still hangs: nothing is sent until it gives up.
-      expect(states).toEqual([])
-      await vi.waitFor(() =>
-        expect(states.at(-1)).toEqual({
-          kind: 'waiting',
-          message: 'Review could not read this Folder with Git. It tries again shortly.',
-        }),
-      )
-      fake.release()
-      await svc.startSession('claude-1', KEY)
-      await vi.waitFor(() =>
-        expect(states.at(-1)).toEqual({
-          kind: 'waiting',
-          message: 'No prompt yet. Changes show here after your first prompt.',
-        }),
-      )
+      const fake = fakeGit()
+      // The first refresh's snapshot and the session base hang.
+      fake.set({ hangs: 2 })
+      const r = await rig({ start: false, git: fake.git, waitMs: 100, timeoutMs: 400 })
+      r.svc.setView({ range: 'session', visible: false })
+      const started = Date.now()
+      await r.svc.startSession('claude-1', KEY)
+      expect(Date.now() - started).toBeLessThan(350)
+      await vi.waitFor(() => expect(r.last()).toEqual(READING))
+      await vi.waitFor(() => expect(r.last()).toEqual(GIT_FAILED), { timeout: 3000 })
+      // The base failed. The next snapshot that succeeds becomes it.
+      await vi.waitFor(() => expect(r.last()).toEqual({ kind: 'changes', range: 'session', changes: [] }), {
+        timeout: 3000,
+      })
+      expect(warn).toHaveBeenCalledWith('Review could not take the session base:', expect.anything())
+      await r.svc.hook(KEY, prompt())
+      await r.claudeWrites('c.txt')
+      expect(await r.listed('session', [['c.txt', true]])).toEqual([['c.txt', true]])
+      expect(await r.listed('turn', [['c.txt', true]])).toEqual([['c.txt', true]])
     } finally {
       warn.mockRestore()
     }
-  })
+  }, 30_000)
+
+  it('a rev-parse that gives no answer says Git could not read the Folder, and opening is tried again until it works', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const fake = fakeGit()
+      fake.set({ hangOpen: true })
+      const started = Date.now()
+      const r = await rig({ start: false, git: fake.git, openTimeoutMs: 200 })
+      expect(Date.now() - started).toBeLessThan(1000)
+      await vi.waitFor(() => expect(r.last()).toEqual(GIT_FAILED))
+      await r.svc.refresh()
+      await sleep(300)
+      expect(r.last()).toEqual(GIT_FAILED)
+      fake.set({ hangOpen: false })
+      await vi.waitFor(
+        async () => {
+          await r.svc.refresh()
+          expect(r.last()).toEqual({ kind: 'waiting', message: 'Changes show here once Claude starts.' })
+        },
+        { timeout: 3000 },
+      )
+      await r.svc.startSession('claude-1', KEY)
+      await vi.waitFor(() => expect(r.last()).toEqual(NO_PROMPT))
+      expect(r.states.some((s) => s.kind === 'no-git')).toBe(false)
+    } finally {
+      warn.mockRestore()
+    }
+  }, 30_000)
 
   it('a Folder outside Git explains that review needs Git, and replies at once', async () => {
     const r = await rig({ repo: temp('bp-plain-'), start: false })

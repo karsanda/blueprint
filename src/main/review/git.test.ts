@@ -13,7 +13,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { createReviewDir, parseChanges, SnapshotStore } from './git'
+import { createReviewDir, GitTimeout, parseChanges, SnapshotStore } from './git'
 
 const dirs: string[] = []
 function temp(prefix: string): string {
@@ -60,15 +60,15 @@ async function open(folder: string): Promise<SnapshotStore> {
   return store
 }
 
-/** A `git` whose `add` hangs until `release` is called, and that runs the real git otherwise. */
-function hangingGit(): { git: string; release(): void } {
+/** A `git` whose `command` hangs until `release` is called, and that runs the real git otherwise. */
+function hangingGit(command = 'add'): { git: string; release(): void } {
   const dir = temp('bp-fake-git-')
   const hang = join(dir, 'hang')
   const program = join(dir, 'git')
   writeFileSync(hang, '')
   writeFileSync(
     program,
-    `#!/bin/sh\nif [ "$1" = add ] && [ -e '${hang}' ]; then exec sleep 5; fi\nexec git "$@"\n`,
+    `#!/bin/sh\nif [ "$1" = ${command} ] && [ -e '${hang}' ]; then exec sleep 5; fi\nexec git "$@"\n`,
   )
   chmodSync(program, 0o755)
   return { git: program, release: () => rmSync(hang) }
@@ -228,7 +228,7 @@ describe('SnapshotStore', () => {
     expect(store.busy).toBe(false)
   })
 
-  it('a git that hangs is stopped after the timeout, and frees the store for the next snapshot', async () => {
+  it('a git that hangs is stopped after the kill limit, and frees the store for the next snapshot', async () => {
     const repo = makeRepo()
     const fake = hangingGit()
     const store = await SnapshotStore.open(repo, temp('bp-store-'), { git: fake.git, timeoutMs: 200 })
@@ -252,6 +252,18 @@ describe('SnapshotStore', () => {
     writeFileSync(join(repo, 'new.bin'), 'stored with Git LFS\n')
     const after = await store.snapshot()
     expect((await store.changes(before, after)).map((c) => c.path)).toEqual(['new.txt'])
+  })
+
+  it('open gives up on a rev-parse that gives no answer, without calling the Folder outside Git', async () => {
+    const repo = makeRepo()
+    const fake = hangingGit('rev-parse')
+    const started = Date.now()
+    await expect(
+      SnapshotStore.open(repo, temp('bp-store-'), { git: fake.git, openTimeoutMs: 200 }),
+    ).rejects.toBeInstanceOf(GitTimeout)
+    expect(Date.now() - started).toBeLessThan(1000)
+    fake.release()
+    expect(await SnapshotStore.open(repo, temp('bp-store-'), { git: fake.git })).toBeInstanceOf(SnapshotStore)
   })
 
   it('open reports a Folder outside any repository, and missing Git', async () => {
