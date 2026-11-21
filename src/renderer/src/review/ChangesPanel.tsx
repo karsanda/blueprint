@@ -1,6 +1,7 @@
 import type { IDockviewPanelProps } from 'dockview-react'
 import { useEffect, useState } from 'react'
 import type { Change, ReviewRange } from '../../../shared/api'
+import { useShallow } from 'zustand/react/shallow'
 import { useReview } from './store'
 
 const RANGES: { range: ReviewRange; label: string }[] = [
@@ -12,19 +13,25 @@ const LETTER = { added: 'A', modified: 'M', deleted: 'D' } as const
 export function ChangesPanel({ api, containerApi }: IDockviewPanelProps) {
   const state = useReview((s) => s.state)
   const range = useReview((s) => s.range)
+  const shownTab = useReview((s) => s.shownTab)
+  const shownName = useReview((s) => (s.shownTab === null ? '' : (s.names[s.shownTab] ?? s.shownTab)))
   const visible = useVisible(api)
   useEffect(() => {
-    window.blueprint.setReviewView({ range, visible })
-  }, [range, visible])
+    window.blueprint.setReviewView({ range, visible, tabId: shownTab })
+  }, [range, visible, shownTab])
   // A pane that goes away is no longer visible, whatever it last reported.
   useEffect(
-    () => () => window.blueprint.setReviewView({ range: useReview.getState().range, visible: false }),
+    () => () => {
+      const last = useReview.getState()
+      window.blueprint.setReviewView({ range: last.range, visible: false, tabId: last.shownTab })
+    },
     [],
   )
 
   return (
     <div className="bp-changes" data-tab="changes">
       <div className="bp-changes-head">
+        <span className="bp-changes-session">{shownName}</span>
         {RANGES.map((r) => (
           <button
             key={r.range}
@@ -60,15 +67,26 @@ export function ChangesPanel({ api, containerApi }: IDockviewPanelProps) {
 
 function ChangeRow({ change: c, onPick }: { change: Change; onPick: () => void }) {
   const picked = useReview((s) => s.picked === c.path)
+  const names = useReview(useShallow((s) => c.by.map((id) => s.names[id] ?? id))).join(', ')
   return (
-    <li data-path={c.path} data-by={c.byClaude ? 'claude' : 'outside'} data-picked={picked} onClick={onPick}>
+    <li
+      data-path={c.path}
+      data-by={c.by.length > 0 ? 'claude' : 'outside'}
+      data-picked={picked}
+      onClick={onPick}
+    >
       <span
         role="img"
-        aria-label={c.byClaude ? 'Claude' : 'Changed outside Claude'}
-        className={c.byClaude ? 'bp-mark-claude' : 'bp-mark-outside'}
+        aria-label={c.by.length > 0 ? names : 'Changed outside Claude'}
+        className={c.by.length > 0 ? 'bp-mark-claude' : 'bp-mark-outside'}
       >
-        {c.byClaude ? '●' : '○'}
+        {c.by.length > 0 ? '●' : '○'}
       </span>
+      {c.by.length > 0 && (
+        <span className="bp-change-by" aria-hidden="true">
+          {names}
+        </span>
+      )}
       <span className="bp-change-kind" data-kind={c.kind}>
         {LETTER[c.kind]}
       </span>

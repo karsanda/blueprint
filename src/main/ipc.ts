@@ -49,6 +49,12 @@ export function registerIpc(win: BrowserWindow, deps: IpcDeps, userData: string)
   })
 
   ipcMain.handle('terminal:start', (_e, req: StartRequest): Promise<StartResult> => startTerminal(deps, req))
+  ipcMain.on('terminal:stop', (_e, tabId: string) => {
+    deps.manager.kill(tabId)
+    deps.relay.unregister(tabId)
+    deps.review.endSession(tabId)
+    deps.notifier.forget(tabId)
+  })
   ipcMain.on('terminal:write', (_e, tabId: string, data: string) => deps.manager.write(tabId, data))
   ipcMain.on('terminal:resize', (_e, tabId: string, cols: number, rows: number) =>
     deps.manager.resize(tabId, cols, rows),
@@ -102,6 +108,11 @@ async function startTerminal(deps: IpcDeps, req: StartRequest): Promise<StartRes
     } catch (err) {
       // Claude is worth more than its review: start it without one.
       console.warn('Review could not start a session:', err)
+    }
+    // The tab may have closed (or started again) while the review was starting: spawn nothing for it.
+    if (deps.relay.currentKey(req.tabId) !== startKey) {
+      if (deps.relay.currentKey(req.tabId) === undefined) deps.review.endSession(req.tabId)
+      return { ok: false, failure: { reason: 'spawn-failed', message: 'The tab was closed.' } }
     }
   }
   try {

@@ -51,6 +51,8 @@ export type ReviewRange = 'turn' | 'session'
 export interface ReviewView {
   range: ReviewRange
   visible: boolean
+  /** The Claude tab the Changes pane shows. */
+  tabId: string | null
 }
 /** A Change as the review lists it. The path is relative to the Folder, with `/`. Counts are 0 for a binary file. */
 export interface Change {
@@ -61,7 +63,15 @@ export interface Change {
   added: number
   removed: number
   binary: boolean
-  byClaude: boolean
+  /** Tab ids of the Claude sessions that made it, in the order they first touched it. Empty: changed outside Claude. */
+  by: string[]
+}
+/** Two or more open sessions touched the same paths. */
+export interface Overlap {
+  tabId: string
+  /** Tab ids. */
+  others: string[]
+  paths: string[]
 }
 export type ReviewState =
   | { kind: 'no-git'; message: string }
@@ -79,6 +89,8 @@ export interface BlueprintApi {
   getFolder(): Promise<FolderState>
   pickFolder(): Promise<FolderState>
   startTerminal(req: StartRequest): Promise<StartResult>
+  /** Ends a closed tab's program and makes main forget its start key and session. */
+  stopTerminal(tabId: string): void
   write(tabId: string, data: string): void
   resize(tabId: string, cols: number, rows: number): void
   onData(tabId: string, cb: (data: string) => void): () => void
@@ -92,6 +104,8 @@ export interface BlueprintApi {
   onFocusTab(cb: (tabId: string) => void): () => void
   /** Every state the review reaches, as the Changes pane should show it. */
   onReviewUpdate(cb: (state: ReviewState) => void): () => void
+  /** Which open sessions changed the same files, pushed whenever it changes. */
+  onOverlaps(cb: (overlaps: Overlap[]) => void): () => void
   /** Tells main which range the Changes pane shows and whether the Developer can see it. */
   setReviewView(view: ReviewView): void
   /** The difference of one Change, by its path relative to the Folder. */

@@ -77,7 +77,7 @@ Node's recursive `fs.watch` adds an inotify watch for every directory, ignored o
 
 ## Who made a Change
 
-A Change is Claude's when Claude touched its path in the chosen range: this turn, or this session. Any other Change is changed outside Claude.
+A Change is made by every Claude session that touched its path in the chosen range: this turn, or this session, of the session the Changes pane shows. A Change no session touched is changed outside Claude.
 
 Claude touched a path when:
 
@@ -88,13 +88,17 @@ A subagent's tool hooks reach the same start key, so its edits count as the sess
 
 Claude Code can run a subagent in the background. The turn then ends at once. The subagent's edits, and its permission prompts, arrive during a later turn. There they count as Claude's.
 
-Blueprint keeps the touched paths with the turn each was touched in. A path Claude touched in an earlier turn and the Developer changed since counts as outside Claude in the later turn.
+Blueprint keeps one touch log for the Folder: each touch records the path, the session's tab and a sequence number. A range starts at the sequence number reached when its base was taken: the shown session's latest Developer prompt for This turn, its start for This session. So a path Claude touched before the range and the Developer changed since counts as outside Claude. A closed session's touches stay in the log, under its last name.
+
+Two sessions overlap when both touched the same path since each of them started. Both tabs then show an overlap mark that names the other session and lists the paths. The mark goes when one of the two closes or restarts.
 
 Known gaps, also listed in the use case:
 
 - `Bash` with `run_in_background` fires `PostToolUse` when the command starts. Its later changes count as outside Claude.
 - A Developer edit made while a Claude `Bash` command runs counts as Claude's. So does one made while its permission prompt waits: the prompt falls between `PreToolUse` and `PostToolUse`.
 - A file that both Claude and the Developer changed counts as Claude's.
+- While one session runs a `Bash` command, another session's edits in that time count as the first session's too.
+- An overlap mark stays until one of the two sessions closes or restarts.
 - MCP tools are not in the `PreToolUse` and `PostToolUse` handling. Files they change count as outside Claude.
 - Files stored with Git LFS are not listed. Snapshots leave them out.
 
@@ -104,17 +108,16 @@ One more gap, too fine for the use case:
 
 ## Panes
 
-- Changes: a narrow pane on the left, full height. Its header switches between This turn and This session. Each row shows ● for Claude or ○ for changed outside Claude, the path, and the added and removed line counts. Picking a row shows that Change in the Difference pane.
+- Changes: a narrow pane on the left, full height. It shows the Claude session focused last; its header names that session and switches between This turn and This session. Each row shows ● with the names of the sessions that made it, or ○ for changed outside Claude, then the path, and the added and removed line counts. Picking a row shows that Change in the Difference pane.
 - Difference: top right. It shows the picked Change and follows each refresh. It empties when the Change leaves the list.
 - When the Folder is not under Git, or Git is not installed, the Changes pane explains that review needs Git.
-- The Folder has one Claude tab until [Run several Claude sessions](../../usecase/blueprint/run_several_claude_sessions.md) is built. The panes show its Changes.
 - Main owns the snapshots and the git calls. How the list and the difference reach the renderer is left to the build.
 
 ## Drawing the difference
 
 - Blueprint's own renderer, not Monaco. It parses the unified diff into rows and change blocks, highlights with Shiki and draws a revision cloud around each change block.
 - Shiki loads a small fixed set of languages when first needed. Other files show plain.
-- Revision clouds mark Claude's Changes only. A Change outside Claude shows plain.
+- Revision clouds mark the Changes any Claude session made. A Change outside Claude shows plain.
 - The revision cloud is a scalloped SVG path sized to the block (`cloudPath` in `~/Workspace/blueprint-prototype/src/looks/looks.js`).
 
 ## Checked in the real app

@@ -47,6 +47,27 @@ describe('StatusRelay', () => {
     expect(calls).toContain('unfollow a')
   })
 
+  it('forgets an unregistered tab: its hooks are ignored and its transcript is unfollowed', () => {
+    const { relay, sent, calls } = setup()
+    relay.register('t', 'k1')
+    relay.hook('k1', { hook_event_name: 'UserPromptSubmit', session_id: 'a', transcript_path: '/a.jsonl' })
+    sent.length = 0
+    relay.unregister('t')
+    relay.hook('k1', { hook_event_name: 'Stop', session_id: 'a' })
+    expect(sent).toEqual([])
+    expect(calls).toContain('unfollow a')
+  })
+
+  it('knows which start key a tab currently has', () => {
+    const { relay } = setup()
+    relay.register('t', 'k1')
+    expect(relay.currentKey('t')).toBe('k1')
+    relay.register('t', 'k2')
+    expect(relay.currentKey('t')).toBe('k2')
+    relay.unregister('t')
+    expect(relay.currentKey('t')).toBeUndefined()
+  })
+
   it('follows the transcript from a prompt', () => {
     const { relay, calls } = setup()
     relay.register('t', 'k1')

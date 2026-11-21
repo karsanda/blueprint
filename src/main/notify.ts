@@ -27,4 +27,10 @@ export class NeedsYouNotifier {
     this.shown.set(tabId, notification)
     notification.show()
   }
+
+  /** Closes the tab's notification when its session closes. */
+  forget(tabId: string): void {
+    this.shown.get(tabId)?.close()
+    this.shown.delete(tabId)
+  }
 }

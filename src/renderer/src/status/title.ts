@@ -10,5 +10,11 @@ export function installTitle(api: DockviewApi): () => void {
     document.title = windowTitle(waiting)
   }
   update()
-  return useClaudeStatus.subscribe(update)
+  const stop = useClaudeStatus.subscribe(update)
+  // dockview fires a layout change for every panel title change.
+  const sub = api.onDidLayoutChange(update)
+  return () => {
+    stop()
+    sub.dispose()
+  }
 }

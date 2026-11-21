@@ -31,9 +31,11 @@ export class TerminalSession {
   private readonly fit = new FitAddon()
   private opened = false
   private started = false
+  private disposed = false
   private observer: ResizeObserver | null = null
   private host: HTMLElement | null = null
   private frame = 0
+  private readonly offs: (() => void)[] = []
 
   constructor(tabId: string, kind: TerminalKind) {
     this.tabId = tabId
@@ -65,11 +67,13 @@ export class TerminalSession {
     }
     this.term.onData((data) => window.blueprint.write(tabId, data))
     this.term.onResize(({ cols, rows }) => window.blueprint.resize(tabId, cols, rows))
-    window.blueprint.onData(tabId, (data) => this.term.write(data))
-    window.blueprint.onExit(tabId, (exit) => {
-      useTerminalStatus.getState().set(tabId, { state: 'exited', exit })
-      if (kind === 'claude') useClaudeStatus.getState().set(tabId, undefined)
-    })
+    this.offs.push(
+      window.blueprint.onData(tabId, (data) => this.term.write(data)),
+      window.blueprint.onExit(tabId, (exit) => {
+        useTerminalStatus.getState().set(tabId, { state: 'exited', exit })
+        if (kind === 'claude') useClaudeStatus.getState().set(tabId, undefined)
+      }),
+    )
   }
 
   /** Shows the terminal in `el`, and starts its program the first time. */
@@ -96,6 +100,16 @@ export class TerminalSession {
     this.observer = null
   }
 
+  /** Ends the view for good: the tab is closed. Stopping its program is main's part. */
+  dispose(): void {
+    this.disposed = true
+    cancelAnimationFrame(this.frame)
+    this.detach()
+    for (const off of this.offs) off()
+    this.term.dispose()
+    sessions.delete(this.tabId)
+  }
+
   /** Starts the program again in the same tab, below the old output. */
   async restart(): Promise<void> {
     this.term.write('\r\n')
@@ -109,6 +123,8 @@ export class TerminalSession {
     this.fitToHost()
     const { cols, rows } = this.term
     const result = await window.blueprint.startTerminal({ tabId: this.tabId, kind: this.kind, cols, rows })
+    // The tab was closed while its program was starting.
+    if (this.disposed) return
     if (!result.ok) {
       status.set(this.tabId, { state: 'failed', failure: result.failure })
       return

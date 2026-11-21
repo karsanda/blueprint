@@ -3,6 +3,7 @@ import type {
   BlueprintApi,
   ExitInfo,
   FolderState,
+  Overlap,
   ReviewState,
   StartRequest,
   StartResult,
@@ -26,6 +27,7 @@ const api: BlueprintApi = {
   getFolder: (): Promise<FolderState> => ipcRenderer.invoke('folder:get'),
   pickFolder: (): Promise<FolderState> => ipcRenderer.invoke('folder:pick'),
   startTerminal: (req: StartRequest): Promise<StartResult> => ipcRenderer.invoke('terminal:start', req),
+  stopTerminal: (tabId) => ipcRenderer.send('terminal:stop', tabId),
   write: (tabId, data) => ipcRenderer.send('terminal:write', tabId, data),
   resize: (tabId, cols, rows) => ipcRenderer.send('terminal:resize', tabId, cols, rows),
   onData: (tabId, cb) => onTab<string>('terminal:data', tabId, cb),
@@ -51,6 +53,13 @@ const api: BlueprintApi = {
     ipcRenderer.on('review:update', listener)
     return () => {
       ipcRenderer.off('review:update', listener)
+    }
+  },
+  onOverlaps: (cb) => {
+    const listener = (_e: IpcRendererEvent, overlaps: Overlap[]): void => cb(overlaps)
+    ipcRenderer.on('review:overlaps', listener)
+    return () => {
+      ipcRenderer.off('review:overlaps', listener)
     }
   },
   setReviewView: (view) => ipcRenderer.send('review:view', view),

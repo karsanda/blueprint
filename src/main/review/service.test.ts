@@ -3,7 +3,7 @@ import { chmodSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSyn
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { Change, ReviewRange, ReviewState } from '../../shared/api'
+import type { Change, Overlap, ReviewRange, ReviewState } from '../../shared/api'
 import type { HookInput } from '../status/hooks'
 import { ReviewService } from './service'
 
@@ -111,17 +111,18 @@ const post = (file: string, extra: Record<string, unknown> = {}): HookInput => (
   ...extra,
 })
 
-const mark = (changes: Change[]): [string, boolean][] => changes.map((c) => [c.path, c.byClaude])
+const mark = (changes: Change[]): [string, string[]][] => changes.map((c) => [c.path, c.by])
 
 interface Rig {
   repo: string
   svc: ReviewService
   states: ReviewState[]
+  overlaps: Overlap[][]
   last(): ReviewState
   write(name: string, text?: string): void
   claudeWrites(name: string, text?: string): Promise<void>
   /** Waits for the shown list to be these paths and marks, refreshing as it waits. */
-  listed(range: ReviewRange, expected: [string, boolean][], timeout?: number): Promise<[string, boolean][]>
+  listed(range: ReviewRange, expected: [string, string[]][], timeout?: number): Promise<[string, string[]][]>
 }
 
 interface RigOptions {
@@ -136,10 +137,16 @@ interface RigOptions {
 async function rig({ start, repo: given, ...opts }: RigOptions = {}): Promise<Rig> {
   const repo = given ?? makeRepo()
   const states: ReviewState[] = []
-  const svc = new ReviewService(temp('bp-run-'), (s) => states.push(s), {
-    pollMs: 50,
-    ...opts,
-  })
+  const overlaps: Overlap[][] = []
+  const svc = new ReviewService(
+    temp('bp-run-'),
+    (s) => states.push(s),
+    (o) => overlaps.push(o),
+    {
+      pollMs: 50,
+      ...opts,
+    },
+  )
   services.push(svc)
   await svc.setFolder(repo)
   if (start !== false) await svc.startSession('claude-1', KEY)
@@ -148,6 +155,7 @@ async function rig({ start, repo: given, ...opts }: RigOptions = {}): Promise<Ri
     repo,
     svc,
     states,
+    overlaps,
     last: () => states[states.length - 1],
     write,
     async claudeWrites(name, text) {
@@ -155,7 +163,7 @@ async function rig({ start, repo: given, ...opts }: RigOptions = {}): Promise<Ri
       await svc.hook(KEY, post(join(repo, name)))
     },
     async listed(range, expected, timeout) {
-      svc.setView({ range, visible: false })
+      svc.setView({ range, visible: false, tabId: null })
       await vi.waitFor(
         async () => {
           await svc.refresh()
@@ -176,14 +184,14 @@ describe('ReviewService', () => {
     r.write('a.txt', 'edited\n')
     await r.svc.hook(KEY, prompt())
     await r.claudeWrites('c.txt')
-    expect(await r.listed('turn', [['c.txt', true]])).toEqual([['c.txt', true]])
+    expect(await r.listed('turn', [['c.txt', ['claude-1']]])).toEqual([['c.txt', ['claude-1']]])
   })
 
   it('the reply to a prompt comes after the turn base', async () => {
     const r = await rig()
     await r.svc.hook(KEY, prompt())
     r.write('d.txt')
-    expect(await r.listed('turn', [['d.txt', false]])).toEqual([['d.txt', false]])
+    expect(await r.listed('turn', [['d.txt', []]])).toEqual([['d.txt', []]])
   })
 
   it("a file Claude's shell command changes is Claude's", async () => {
@@ -193,7 +201,7 @@ describe('ReviewService', () => {
     await r.svc.hook(KEY, { hook_event_name: 'PreToolUse', ...bash })
     r.write('e.txt')
     await r.svc.hook(KEY, { hook_event_name: 'PostToolUse', ...bash })
-    expect(await r.listed('turn', [['e.txt', true]])).toEqual([['e.txt', true]])
+    expect(await r.listed('turn', [['e.txt', ['claude-1']]])).toEqual([['e.txt', ['claude-1']]])
   })
 
   it("a file a failing shell command changes is Claude's", async () => {
@@ -203,7 +211,7 @@ describe('ReviewService', () => {
     await r.svc.hook(KEY, { hook_event_name: 'PreToolUse', ...bash })
     r.write('h.txt')
     await r.svc.hook(KEY, { hook_event_name: 'PostToolUseFailure', ...bash })
-    expect(await r.listed('turn', [['h.txt', true]])).toEqual([['h.txt', true]])
+    expect(await r.listed('turn', [['h.txt', ['claude-1']]])).toEqual([['h.txt', ['claude-1']]])
   })
 
   it("a subagent's edit is Claude's", async () => {
@@ -211,7 +219,7 @@ describe('ReviewService', () => {
     await r.svc.hook(KEY, prompt())
     r.write('g.txt')
     await r.svc.hook(KEY, post(join(r.repo, 'g.txt'), { agent_id: 'sub-1' }))
-    expect(await r.listed('turn', [['g.txt', true]])).toEqual([['g.txt', true]])
+    expect(await r.listed('turn', [['g.txt', ['claude-1']]])).toEqual([['g.txt', ['claude-1']]])
   })
 
   it("in a Folder opened through a symlink, an edit named by the real path or the link is Claude's", async () => {
@@ -225,12 +233,12 @@ describe('ReviewService', () => {
     await r.claudeWrites('link.txt')
     expect(
       await r.listed('turn', [
-        ['link.txt', true],
-        ['real.txt', true],
+        ['link.txt', ['claude-1']],
+        ['real.txt', ['claude-1']],
       ]),
     ).toEqual([
-      ['link.txt', true],
-      ['real.txt', true],
+      ['link.txt', ['claude-1']],
+      ['real.txt', ['claude-1']],
     ])
   })
 
@@ -238,7 +246,7 @@ describe('ReviewService', () => {
     const r = await rig()
     await r.svc.hook(KEY, prompt())
     r.write('f.txt')
-    expect(await r.listed('turn', [['f.txt', false]])).toEqual([['f.txt', false]])
+    expect(await r.listed('turn', [['f.txt', []]])).toEqual([['f.txt', []]])
   })
 
   it("Claude Code's own prompts do not start a turn", async () => {
@@ -246,7 +254,7 @@ describe('ReviewService', () => {
     await r.svc.hook(KEY, prompt())
     await r.claudeWrites('a.txt', 'changed\n')
     await r.svc.hook(KEY, prompt({ prompt: '<task-notification>\n<task-id>b1</task-id>' }))
-    expect(await r.listed('turn', [['a.txt', true]])).toEqual([['a.txt', true]])
+    expect(await r.listed('turn', [['a.txt', ['claude-1']]])).toEqual([['a.txt', ['claude-1']]])
   })
 
   it('This session lists both turns', async () => {
@@ -258,14 +266,14 @@ describe('ReviewService', () => {
     await r.claudeWrites('b.txt')
     expect(
       await r.listed('session', [
-        ['a.txt', true],
-        ['b.txt', true],
+        ['a.txt', ['claude-1']],
+        ['b.txt', ['claude-1']],
       ]),
     ).toEqual([
-      ['a.txt', true],
-      ['b.txt', true],
+      ['a.txt', ['claude-1']],
+      ['b.txt', ['claude-1']],
     ])
-    expect(await r.listed('turn', [['b.txt', true]])).toEqual([['b.txt', true]])
+    expect(await r.listed('turn', [['b.txt', ['claude-1']]])).toEqual([['b.txt', ['claude-1']]])
   })
 
   it("a path changed since Claude's turn is outside Claude in the later turn", async () => {
@@ -274,8 +282,8 @@ describe('ReviewService', () => {
     await r.claudeWrites('a.txt', 'claude\n')
     await r.svc.hook(KEY, prompt())
     r.write('a.txt', 'developer\n')
-    expect(await r.listed('turn', [['a.txt', false]])).toEqual([['a.txt', false]])
-    expect(await r.listed('session', [['a.txt', true]])).toEqual([['a.txt', true]])
+    expect(await r.listed('turn', [['a.txt', []]])).toEqual([['a.txt', []]])
+    expect(await r.listed('session', [['a.txt', ['claude-1']]])).toEqual([['a.txt', ['claude-1']]])
   })
 
   it('a restart starts a new session', async () => {
@@ -286,7 +294,7 @@ describe('ReviewService', () => {
     expect(await r.listed('session', [])).toEqual([])
     r.write('z.txt')
     await r.svc.hook(KEY, post(join(r.repo, 'z.txt')))
-    expect(await r.listed('session', [['z.txt', false]])).toEqual([['z.txt', false]])
+    expect(await r.listed('session', [['z.txt', []]])).toEqual([['z.txt', []]])
   })
 
   it('/clear keeps the session', async () => {
@@ -294,7 +302,7 @@ describe('ReviewService', () => {
     await r.svc.hook(KEY, prompt())
     await r.claudeWrites('a.txt', 'claude\n')
     await r.svc.hook(KEY, prompt({ session_id: 's2' }))
-    expect(await r.listed('session', [['a.txt', true]])).toEqual([['a.txt', true]])
+    expect(await r.listed('session', [['a.txt', ['claude-1']]])).toEqual([['a.txt', ['claude-1']]])
   })
 
   it('before the first prompt, This turn says so', async () => {
@@ -328,7 +336,7 @@ describe('ReviewService', () => {
       timeout: 10_000,
     })
     await r.claudeWrites('c.txt')
-    expect(await r.listed('turn', [['c.txt', true]], 10_000)).toEqual([['c.txt', true]])
+    expect(await r.listed('turn', [['c.txt', ['claude-1']]], 10_000)).toEqual([['c.txt', ['claude-1']]])
   }, 30_000)
 
   it("with a git slower than the wait bound, a file Claude's shell command writes is still Claude's", async () => {
@@ -349,7 +357,7 @@ describe('ReviewService', () => {
     r.write('e.txt')
     fake.set({ slow: false })
     await r.svc.hook(KEY, { hook_event_name: 'PostToolUse', ...bash })
-    expect(await r.listed('turn', [['e.txt', true]], 10_000)).toEqual([['e.txt', true]])
+    expect(await r.listed('turn', [['e.txt', ['claude-1']]], 10_000)).toEqual([['e.txt', ['claude-1']]])
   }, 30_000)
 
   it('what Claude touches while the turn base is still read belongs to the new turn', async () => {
@@ -361,7 +369,7 @@ describe('ReviewService', () => {
     await r.svc.hook(KEY, prompt())
     await r.claudeWrites('b.txt')
     fake.set({ slow: false })
-    expect(await r.listed('turn', [['b.txt', true]], 10_000)).toEqual([['b.txt', true]])
+    expect(await r.listed('turn', [['b.txt', ['claude-1']]], 10_000)).toEqual([['b.txt', ['claude-1']]])
   }, 30_000)
 
   it('a late turn base is dropped when a newer Developer prompt arrived', async () => {
@@ -379,21 +387,21 @@ describe('ReviewService', () => {
       timeout: 5000,
     })
     await r.claudeWrites('c.txt')
-    expect(await r.listed('turn', [['c.txt', true]], 5000)).toEqual([['c.txt', true]])
+    expect(await r.listed('turn', [['c.txt', ['claude-1']]], 5000)).toEqual([['c.txt', ['claude-1']]])
   }, 30_000)
 
   it('a base that lands late lists nothing in reverse while the next snapshot runs', async () => {
     const fake = fakeGit()
     fake.set({ slow: true })
     const r = await rig({ start: false, git: fake.git, waitMs: WAIT_MS, timeoutMs: KILL_MS })
-    r.svc.setView({ range: 'session', visible: false })
+    r.svc.setView({ range: 'session', visible: false, tabId: null })
     // The base waits behind the first refresh's snapshot, which has already read the Folder.
     await r.svc.startSession('claude-1', KEY)
     r.write('f.txt')
     // Once the base lands, a view change lists it against the latest tree while the next snapshot runs.
     await vi.waitFor(
       () => {
-        r.svc.setView({ range: 'session', visible: false })
+        r.svc.setView({ range: 'session', visible: false, tabId: null })
         expect(r.last()).not.toEqual(READING)
       },
       { timeout: 5000, interval: 20 },
@@ -408,7 +416,7 @@ describe('ReviewService', () => {
       // The first refresh's snapshot, the session base and the refresh after it hang.
       fake.set({ hangs: 3 })
       const r = await rig({ start: false, git: fake.git, waitMs: 100, timeoutMs: 400 })
-      r.svc.setView({ range: 'session', visible: false })
+      r.svc.setView({ range: 'session', visible: false, tabId: null })
       const started = Date.now()
       await r.svc.startSession('claude-1', KEY)
       expect(Date.now() - started).toBeLessThan(350)
@@ -425,8 +433,8 @@ describe('ReviewService', () => {
       )
       await r.svc.hook(KEY, prompt())
       await r.claudeWrites('c.txt')
-      expect(await r.listed('session', [['c.txt', true]])).toEqual([['c.txt', true]])
-      expect(await r.listed('turn', [['c.txt', true]])).toEqual([['c.txt', true]])
+      expect(await r.listed('session', [['c.txt', ['claude-1']]])).toEqual([['c.txt', ['claude-1']]])
+      expect(await r.listed('turn', [['c.txt', ['claude-1']]])).toEqual([['c.txt', ['claude-1']]])
     } finally {
       warn.mockRestore()
     }
@@ -475,7 +483,7 @@ describe('ReviewService', () => {
   it('polls only while the Changes pane is visible', async () => {
     const r = await rig()
     await r.svc.hook(KEY, prompt())
-    r.svc.setView({ range: 'turn', visible: true })
+    r.svc.setView({ range: 'turn', visible: true, tabId: null })
     r.write('p.txt')
     await vi.waitFor(
       () =>
@@ -485,7 +493,7 @@ describe('ReviewService', () => {
         }),
       { timeout: 1000 },
     )
-    r.svc.setView({ range: 'turn', visible: false })
+    r.svc.setView({ range: 'turn', visible: false, tabId: null })
     await new Promise((resolve) => setTimeout(resolve, 100))
     r.write('q.txt')
     await new Promise((resolve) => setTimeout(resolve, 300))
@@ -496,11 +504,81 @@ describe('ReviewService', () => {
   it('sends only when the state changes', async () => {
     const r = await rig()
     await r.svc.hook(KEY, prompt())
-    r.svc.setView({ range: 'turn', visible: true })
+    r.svc.setView({ range: 'turn', visible: true, tabId: null })
     await new Promise((resolve) => setTimeout(resolve, 100))
     const before = r.states.length
     await new Promise((resolve) => setTimeout(resolve, 300))
     expect(r.states.length - before).toBeLessThanOrEqual(1)
+  })
+
+  it('each Change names the sessions that made it', async () => {
+    const r = await rig()
+    await r.svc.startSession('claude-2', 'k2')
+    await r.svc.hook(KEY, prompt())
+    await r.svc.hook('k2', prompt())
+    await r.claudeWrites('a.txt', 'one\n')
+    r.write('b.txt')
+    await r.svc.hook('k2', post(join(r.repo, 'b.txt')))
+    r.svc.setView({ range: 'session', visible: false, tabId: 'claude-1' })
+    await vi.waitFor(async () => {
+      await r.svc.refresh()
+      const state = r.last()
+      expect(state.kind === 'changes' && mark(state.changes)).toEqual([
+        ['a.txt', ['claude-1']],
+        ['b.txt', ['claude-2']],
+      ])
+    })
+  })
+
+  it("the view chooses which session's turn is shown", async () => {
+    const r = await rig()
+    await r.svc.hook(KEY, prompt())
+    await r.claudeWrites('a.txt', 'one\n')
+    await r.svc.startSession('claude-2', 'k2')
+    await r.svc.hook('k2', prompt())
+    r.write('b.txt')
+    await r.svc.hook('k2', post(join(r.repo, 'b.txt')))
+    const shows = async (tabId: string | null, expected: [string, string[]][]) => {
+      r.svc.setView({ range: 'turn', visible: false, tabId })
+      await vi.waitFor(async () => {
+        await r.svc.refresh()
+        const state = r.last()
+        expect(state.kind === 'changes' && mark(state.changes)).toEqual(expected)
+      })
+    }
+    await shows('claude-1', [
+      ['a.txt', ['claude-1']],
+      ['b.txt', ['claude-2']],
+    ])
+    await shows('claude-2', [['b.txt', ['claude-2']]])
+    await shows(null, [['b.txt', ['claude-2']]])
+    await shows('claude-9', [['b.txt', ['claude-2']]])
+  })
+
+  it('two sessions on one file overlap until one ends', async () => {
+    const r = await rig()
+    await r.svc.startSession('claude-2', 'k2')
+    await r.svc.hook(KEY, prompt())
+    await r.svc.hook('k2', prompt())
+    r.write('notes.txt')
+    await r.svc.hook(KEY, post(join(r.repo, 'notes.txt')))
+    await r.svc.hook('k2', post(join(r.repo, 'notes.txt')))
+    expect(r.overlaps.at(-1)).toEqual([
+      { tabId: 'claude-1', others: ['claude-2'], paths: ['notes.txt'] },
+      { tabId: 'claude-2', others: ['claude-1'], paths: ['notes.txt'] },
+    ])
+    r.svc.endSession('claude-2')
+    expect(r.overlaps.at(-1)).toEqual([])
+  })
+
+  it("an ended session's Changes keep its tab", async () => {
+    const r = await rig()
+    await r.svc.startSession('claude-2', 'k2')
+    await r.svc.hook('k2', prompt())
+    r.write('a.txt', 'two sessions\n')
+    await r.svc.hook('k2', post(join(r.repo, 'a.txt')))
+    r.svc.endSession('claude-2')
+    expect(await r.listed('session', [['a.txt', ['claude-2']]])).toEqual([['a.txt', ['claude-2']]])
   })
 
   it('diff gives the patch, binary or none', async () => {
@@ -510,12 +588,12 @@ describe('ReviewService', () => {
     r.write('bin.dat', 'a\0b\0c')
     expect(
       await r.listed('turn', [
-        ['bin.dat', false],
-        ['t.txt', true],
+        ['bin.dat', []],
+        ['t.txt', ['claude-1']],
       ]),
     ).toEqual([
-      ['bin.dat', false],
-      ['t.txt', true],
+      ['bin.dat', []],
+      ['t.txt', ['claude-1']],
     ])
     expect(await r.svc.diff('t.txt')).toMatchObject({
       kind: 'text',
@@ -536,7 +614,7 @@ describe('ReviewService', () => {
       await new Promise((resolve) => setTimeout(resolve, 1))
       const moved = r.svc.setFolder(other)
       await Promise.all([started, moved])
-      r.svc.setView({ range: 'session', visible: true })
+      r.svc.setView({ range: 'session', visible: true, tabId: null })
       await vi.waitFor(() =>
         expect(r.last()).toEqual({ kind: 'waiting', message: 'Changes show here once Claude starts.' }),
       )
@@ -549,7 +627,7 @@ describe('ReviewService', () => {
 
   it('every view change sends the state, even an unchanged one', async () => {
     const r = await rig()
-    const view = { range: 'turn' as const, visible: false }
+    const view = { range: 'turn' as const, visible: false, tabId: null }
     r.svc.setView(view)
     await vi.waitFor(() => expect(r.states.length).toBeGreaterThan(0))
     const before = r.states.length

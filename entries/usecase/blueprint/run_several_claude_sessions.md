@@ -38,10 +38,10 @@ Covers: Basic Flow, Alternative Flow 1, Alternative Flow 3.
 
 Work items:
 
-- [ ] Start another Claude session in a new tab
-- [ ] Tag each Change with the session that made it
-- [ ] Warn when two sessions change the same file
-- [ ] Confirm before closing a working session
+- [x] Start another Claude session in a new tab ([#9](https://github.com/karsanda/blueprint/issues/9))
+- [x] Tag each Change with the session that made it ([#9](https://github.com/karsanda/blueprint/issues/9))
+- [x] Warn when two sessions change the same file ([#9](https://github.com/karsanda/blueprint/issues/9))
+- [x] Confirm before closing a working session ([#9](https://github.com/karsanda/blueprint/issues/9))
 
 Test cases:
 
@@ -54,6 +54,10 @@ Test cases:
 
 Covers: Alternative Flow 2.
 
+Work items:
+
+- [x] Rename a session's tab, and use the new name everywhere ([#9](https://github.com/karsanda/blueprint/issues/9))
+
 Test cases:
 
 - Given a renamed session, when it edits a file, then the Change shows the new name.
@@ -61,6 +65,8 @@ Test cases:
 ## Known gaps
 
 - All sessions share one Folder. Separate working copies per session come after the MVP.
+- While Claude Code runs a command for one session, another session's changes also count as the first session's.
+- An overlap warning stays until one of the two sessions closes or restarts.
 
 ## Resources
 

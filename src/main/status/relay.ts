@@ -33,14 +33,24 @@ export class StatusRelay {
 
   /** A tab's new start replaces its previous one, whose transcript is no longer followed. */
   register(tabId: string, startKey: string): void {
-    const previous = this.keyByTab.get(tabId)
-    if (previous !== undefined) {
-      const old = this.startByKey.get(previous)
-      if (old?.sessionId !== undefined) this.follower.unfollow(old.sessionId)
-      this.startByKey.delete(previous)
-    }
+    this.unregister(tabId)
     this.keyByTab.set(tabId, startKey)
     this.startByKey.set(startKey, { tabId })
+  }
+
+  /** The start key a tab's current start has, or undefined once the tab was unregistered. */
+  currentKey(tabId: string): string | undefined {
+    return this.keyByTab.get(tabId)
+  }
+
+  /** Forgets a closed tab's start key and stops following its transcript. */
+  unregister(tabId: string): void {
+    const key = this.keyByTab.get(tabId)
+    if (key === undefined) return
+    const start = this.startByKey.get(key)
+    if (start?.sessionId !== undefined) this.follower.unfollow(start.sessionId)
+    this.startByKey.delete(key)
+    this.keyByTab.delete(tabId)
   }
 
   hook(startKey: string, e: HookInput): void {

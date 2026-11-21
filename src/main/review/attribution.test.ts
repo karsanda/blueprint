@@ -18,21 +18,56 @@ describe('attribution', () => {
     expect(pathInFolder('/f', '/f/../g/x')).toBeNull()
   })
 
-  it("a path touched in an earlier turn is not this turn's", () => {
+  it('by names every session that touched a path after the mark, in first-touch order', () => {
     const log = new TouchLog()
-    log.startTurn()
-    log.touch('a')
-    log.startTurn()
-    expect(log.touched('a', 'turn')).toBe(false)
-    expect(log.touched('a', 'session')).toBe(true)
+    log.touch('a', 'B')
+    log.touch('a', 'A')
+    log.touch('a', 'B')
+    expect(log.by('a', 0)).toEqual(['B', 'A'])
+    expect(log.by('other', 0)).toEqual([])
   })
 
-  it("a path touched again in this turn is this turn's", () => {
+  it('a touch before the mark does not count', () => {
     const log = new TouchLog()
-    log.startTurn()
-    log.touch('a')
-    log.startTurn()
-    log.touch('a')
-    expect(log.touched('a', 'turn')).toBe(true)
+    log.touch('a', 'A')
+    const mark = log.mark()
+    log.touch('a', 'B')
+    expect(log.by('a', mark)).toEqual(['B'])
+    expect(log.by('a', log.mark())).toEqual([])
+  })
+
+  it('overlaps pairs sessions on the paths both touched since they started', () => {
+    const log = new TouchLog()
+    const since = log.mark()
+    log.touch('x', 'A')
+    log.touch('x', 'B')
+    log.touch('y', 'B')
+    const later = log.mark()
+    expect(
+      log.overlaps([
+        { tabId: 'A', since },
+        { tabId: 'B', since },
+        { tabId: 'C', since: later },
+      ]),
+    ).toEqual([
+      { tabId: 'A', others: ['B'], paths: ['x'] },
+      { tabId: 'B', others: ['A'], paths: ['x'] },
+    ])
+  })
+
+  it('stays fast for a Bash change of 20,000 files', () => {
+    const log = new TouchLog()
+    const paths = Array.from({ length: 20_000 }, (_, i) => `dir/file_${i}.txt`)
+    const started = performance.now()
+    log.touchAll(paths, 'A')
+    log.touchAll(paths.slice(0, 10_000), 'B')
+    for (const p of paths) log.by(p, 0)
+    const overlaps = log.overlaps([
+      { tabId: 'A', since: 0 },
+      { tabId: 'B', since: 0 },
+    ])
+    expect(performance.now() - started).toBeLessThan(500)
+    expect(overlaps.map((o) => o.tabId)).toEqual(['A', 'B'])
+    expect(overlaps[0].paths).toHaveLength(10_000)
   })
 })

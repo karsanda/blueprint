@@ -46,12 +46,15 @@ const headless =
     : ['--ozone-platform=headless', '--ozone-override-screen-size=1920,1080']
 const noSessionBus = 'unix:path=/nonexistent/blueprint-e2e-bus'
 
+/** Where a run's temp dirs go: the run directory its global setup made, or the system's. */
+const e2eRoot = (): string => process.env.BLUEPRINT_E2E_ROOT ?? tmpdir()
+
 function definedEnv(env: NodeJS.ProcessEnv): Record<string, string> {
   return Object.fromEntries(Object.entries(env).filter((e): e is [string, string] => e[1] !== undefined))
 }
 
 export async function launch(opts: LaunchOptions = {}): Promise<Launched> {
-  const tmp = mkdtempSync(join(tmpdir(), 'blueprint-e2e-'))
+  const tmp = mkdtempSync(join(e2eRoot(), 'blueprint-e2e-'))
   const log = mkdtempSync(join(tmp, 'log-'))
   const home = opts.home ?? mkdtempSync(join(tmp, 'home-'))
   const folder = opts.folder === undefined ? mkdtempSync(join(tmp, 'folder-')) : opts.folder
@@ -120,7 +123,7 @@ export async function typeInto(page: Page, tabId: string, text: string): Promise
 
 /** A temp Folder in a Git repository, with `notes.txt` and `README.md` committed. */
 export function gitFolder(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'blueprint-e2e-git-'))
+  const dir = mkdtempSync(join(e2eRoot(), 'blueprint-e2e-git-'))
   writeFileSync(join(dir, 'notes.txt'), 'notes: first line\nnotes: second line\n')
   writeFileSync(join(dir, 'README.md'), '# Test Folder\n\nA Folder for review tests.\n')
   // The Developer's global and system git config stay out of the test's own git calls.
@@ -143,7 +146,7 @@ export async function watchReview(page: Page): Promise<void> {
   await page.evaluate(() => {
     window.reviewStates = []
     window.blueprint.onReviewUpdate((state) => window.reviewStates?.push(state))
-    window.blueprint.setReviewView({ range: 'turn', visible: true })
+    window.blueprint.setReviewView({ range: 'turn', visible: true, tabId: null })
   })
 }
 

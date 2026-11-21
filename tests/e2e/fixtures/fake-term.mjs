@@ -4,8 +4,34 @@ import { randomUUID } from 'node:crypto'
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
 
-const name = basename(process.argv[1])
+const program = basename(process.argv[1])
 const log = process.env.BLUEPRINT_TEST_LOG
+// Each started fake claude takes the next instance number k, counted in claude.instances. The
+// first keeps the stem `claude`; instance k >= 2 uses `claude<k>`, so its logs and files stay apart.
+// A claude that exits on its own (the `~` key) hands its number to the next start, which is the
+// tab's Restart: a closed tab's number is never reused.
+const readLines = (file) => {
+  try {
+    return readFileSync(join(log, file), 'utf8').trim().split('\n').filter(Boolean)
+  } catch {
+    return []
+  }
+}
+let instance = 0
+let name = program
+if (program === 'claude') {
+  const released = readLines('claude.released')
+  const free = released.find((n) => !n.startsWith('taken') && !released.includes(`taken ${n}`))
+  if (free) {
+    instance = Number(free)
+    appendFileSync(join(log, 'claude.released'), `taken ${free}\n`)
+  } else {
+    appendFileSync(join(log, 'claude.instances'), 'x\n')
+    instance = readLines('claude.instances').length
+  }
+  if (instance > 1) name = `claude${instance}`
+}
+const isClaude = program === 'claude'
 const out = (file, data) => appendFileSync(join(log, `${name}.${file}`), data)
 const size = () => `${process.stdout.columns}x${process.stdout.rows}`
 
@@ -21,16 +47,16 @@ out(
 )
 process.stdin.setRawMode(true)
 process.stdin.resume()
-process.stdout.write(`${name} ready\r\n`)
+process.stdout.write(`${program} ready\r\n`)
 process.stdout.on('resize', () => out('size', size() + '\n'))
 
 // As `claude`, it reads Blueprint's hook settings once and posts hook events on keys.
 const arg = (flag) => process.argv[process.argv.indexOf(flag) + 1]
 let sessionId = arg('--session-id')
-let transcript = join(log, 'claude.transcript.jsonl')
+let transcript = join(log, `${name}.transcript.jsonl`)
 let clears = 0
 const hook = (() => {
-  if (name !== 'claude' || !process.argv.includes('--settings')) return null
+  if (!isClaude || !process.argv.includes('--settings')) return null
   const settings = JSON.parse(readFileSync(arg('--settings'), 'utf8'))
   return (event) => settings.hooks[event][0].hooks[0]
 })()
@@ -72,7 +98,7 @@ const hookKeys = {
   w: () =>
     later(() => {
       const n = ++writes
-      const file = resolve(`claude-${n}.txt`)
+      const file = resolve(`${name}-${n}.txt`)
       writeFileSync(file, `written by claude ${n}\n`)
       return postNow('PostToolUse', {
         tool_name: 'Write',
@@ -107,7 +133,7 @@ const hookKeys = {
   c: () =>
     later(() => {
       sessionId = randomUUID()
-      transcript = join(log, `claude.transcript-${++clears}.jsonl`)
+      transcript = join(log, `${name}.transcript-${++clears}.jsonl`)
       out('hooks', 'clear\n')
     }),
   x: () => appendFileSync(transcript, interrupt + '\n'),
@@ -119,11 +145,14 @@ process.stdin.on('data', (buf) => {
   out('input', buf)
   // Keys typed together may arrive as one chunk: each one still counts.
   for (const k of buf.toString('latin1')) {
-    if (k === '~') process.exit(3)
-    if (name === 'claude') hookKeys[k]?.()
+    if (k === '~') {
+      if (instance > 0) appendFileSync(join(log, 'claude.released'), `${instance}\n`)
+      process.exit(3)
+    }
+    if (isClaude) hookKeys[k]?.()
   }
   const key = buf.length === 1 ? String.fromCharCode(buf[0]) : ''
-  if (key === 'f' && name === 'fake-shell') {
+  if (key === 'f' && program === 'fake-shell') {
     process.stdout.write(`\x1b[?1049h\x1b[2J\x1b[${process.stdout.rows};1HBOTTOM`)
     out('size', size() + '\n')
   }
