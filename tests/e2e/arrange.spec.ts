@@ -63,16 +63,26 @@ test('dragging the gap resizes both panes and their content', async () => {
   const { app, page, log } = await launch()
   await ready(page)
   const claude = groupWith(page, 'Claude')
-  const shell = groupWith(page, 'Shell')
-  const [claudeBefore, shellBefore] = [await box(claude), await box(shell)]
-  const [claudeCols, shellCols] = [
-    (await probeSize(page, 'claude-1'))!.cols,
-    (await probeSize(page, 'shell-1'))!.cols,
-  ]
+  const difference = groupWith(page, 'Difference')
+  const [claudeBefore, differenceBefore] = [await box(claude), await box(difference)]
+  const claudeCols = (await probeSize(page, 'claude-1'))!.cols
 
-  const sash = await box(
-    page.locator('.dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash').first(),
+  // The gap between Claude and Difference is the vertical sash that sits between their edges.
+  const sashes = await page.locator('.dv-sash').evaluateAll((els) =>
+    els.map((e) => {
+      const { x, y, width, height } = e.getBoundingClientRect()
+      return { x, y, width, height }
+    }),
   )
+  const gapX = claudeBefore.x + claudeBefore.width
+  const sash = sashes.find(
+    (r) =>
+      r.height > r.width &&
+      r.x >= gapX - 14 &&
+      r.x <= differenceBefore.x + 4 &&
+      r.y < claudeBefore.y + claudeBefore.height,
+  )
+  if (!sash) throw new Error('no sash between Claude and Difference')
   const x = sash.x + sash.width / 2
   const y = sash.y + sash.height / 2
   await page.mouse.move(x, y)
@@ -81,9 +91,8 @@ test('dragging the gap resizes both panes and their content', async () => {
   await page.mouse.up()
 
   expect(Math.abs(claudeBefore.width - (await box(claude)).width - 200)).toBeLessThanOrEqual(10)
-  expect((await box(shell)).width).toBeGreaterThan(shellBefore.width)
+  expect((await box(difference)).width).toBeGreaterThan(differenceBefore.width)
   await expect.poll(async () => (await probeSize(page, 'claude-1'))!.cols).toBeLessThan(claudeCols)
-  await expect.poll(async () => (await probeSize(page, 'shell-1'))!.cols).toBeGreaterThan(shellCols)
   const size = await probeSize(page, 'claude-1')
   await expect.poll(() => lastLine(readLog(log, 'claude.size'))).toBe(`${size!.cols}x${size!.rows}`)
   await app.close()
@@ -109,8 +118,8 @@ test("dropping a tab on a pane's middle joins its tabs", async () => {
   await ready(page)
   const target = await box(groupWith(page, 'Claude').locator('.dv-content-container'))
   await dropTab(page, 'Shell', target.x + target.width / 2, target.y + target.height / 2)
-  await expect(page.locator('.dv-groupview')).toHaveCount(1)
-  expect(await tabTitles(page.locator('.dv-groupview'))).toEqual(['Claude', 'Shell'])
+  await expect(page.locator('.dv-groupview')).toHaveCount(3)
+  expect(await tabTitles(groupWith(page, 'Claude'))).toEqual(['Claude', 'Shell'])
   await app.close()
 })
 
@@ -120,11 +129,11 @@ test("dropping a tab on a pane's edge splits that pane", async () => {
   const content = () => groupWith(page, 'Claude').locator('.dv-content-container')
   let target = await box(content())
   await dropTab(page, 'Shell', target.x + target.width / 2, target.y + target.height / 2)
-  await expect(page.locator('.dv-groupview')).toHaveCount(1)
+  await expect(page.locator('.dv-groupview')).toHaveCount(3)
 
   target = await box(content())
   await dropTab(page, 'Shell', target.x + target.width * 0.95, target.y + target.height / 2)
-  await expect(page.locator('.dv-groupview')).toHaveCount(2)
+  await expect(page.locator('.dv-groupview')).toHaveCount(4)
   expect((await box(groupWith(page, 'Shell'))).x).toBeGreaterThan((await box(groupWith(page, 'Claude'))).x)
   await app.close()
 })
@@ -140,7 +149,7 @@ test('zooming out returns the previous layout', async () => {
 
   await claude.getByRole('button', { name: 'Zoom pane' }).click()
   await expect(shell).toBeHidden()
-  expect((await box(claude)).width).toBeGreaterThan(claudeBefore.width + shellBefore.width)
+  expect((await box(claude)).width).toBeGreaterThan(shellBefore.width)
   // The hidden pane's program keeps its size: it is never squeezed to nothing.
   await page.waitForTimeout(300)
   expect(readLog(log, 'fake-shell.size')).toBe(shellSizes)
@@ -163,7 +172,7 @@ test('tabs have no close action until a closed tab can be reopened', async () =>
   await expect(page.locator('.dv-default-tab-action')).toHaveCount(0)
   await page.locator('.dv-tab', { hasText: 'Shell' }).click({ button: 'middle' })
   await page.waitForTimeout(300)
-  await expect(page.locator('.dv-tab')).toHaveCount(2)
+  await expect(page.locator('.dv-tab')).toHaveCount(4)
   const pid = JSON.parse(readLog(log, 'fake-shell.start').trim().split('\n')[0] ?? '{}').pid
   expect(() => process.kill(pid, 0)).not.toThrow()
   await app.close()

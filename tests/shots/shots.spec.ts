@@ -7,7 +7,10 @@ test('build step 1 screens', async () => {
   await expect.poll(() => probeText(page, 'shell-1')).toContain('fake-shell ready')
   await page.locator('[data-tab="claude-1"]').click()
   await page.screenshot({ path: '.shots/step-1-default.png' })
-  await page.getByRole('button', { name: 'Zoom pane' }).first().click()
+  await page
+    .locator('.dv-groupview', { hasText: 'Claude' })
+    .getByRole('button', { name: 'Zoom pane' })
+    .click()
   await page.waitForTimeout(300) // let the terminal refit and redraw at the new size
   await page.screenshot({ path: '.shots/step-1-zoomed.png' })
   await app.close()
