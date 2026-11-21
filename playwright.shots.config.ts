@@ -6,4 +6,6 @@ export default defineConfig({
   workers: 1,
   timeout: 30_000,
   reporter: 'list',
+  globalSetup: './tests/e2e/global_setup.ts',
+  globalTeardown: './tests/e2e/global_teardown.ts',
 })

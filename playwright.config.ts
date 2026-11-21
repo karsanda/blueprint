@@ -7,4 +7,6 @@ export default defineConfig({
   timeout: 30_000,
   expect: { timeout: 5_000 },
   reporter: 'list',
+  globalSetup: './tests/e2e/global_setup.ts',
+  globalTeardown: './tests/e2e/global_teardown.ts',
 })
