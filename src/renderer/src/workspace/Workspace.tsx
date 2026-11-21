@@ -13,6 +13,7 @@ import { installNotifications } from '../status/notify'
 import { installTitle } from '../status/title'
 import { TerminalPanel } from '../terminal/TerminalPanel'
 import { addDefaultPanels } from './defaultLayout'
+import { installLayoutSaving, restoreLayout } from './persist'
 import { ZoomAction } from './ZoomAction'
 
 const blueprintTheme: DockviewTheme = { name: 'blueprint', className: 'dockview-theme-blueprint', gap: 6 }
@@ -44,9 +45,20 @@ export function Workspace() {
       rightHeaderActionsComponent={ZoomAction}
       defaultTabComponent={BlueprintTab}
       onReady={(e) => {
-        addDefaultPanels(e.api)
-        installTitle(e.api)
-        installNotifications(e.api)
+        void (async () => {
+          try {
+            const saved = await window.blueprint.getLayout().catch(() => null)
+            if (saved) restoreLayout(e.api, saved)
+            addDefaultPanels(e.api)
+          } catch {
+            // A layout that breaks the restore must not leave the window without its installers.
+            e.api.clear()
+            addDefaultPanels(e.api)
+          }
+          installLayoutSaving(e.api)
+          installTitle(e.api)
+          installNotifications(e.api)
+        })()
       }}
     />
   )

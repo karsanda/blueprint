@@ -58,6 +58,11 @@ Test cases:
 
 Covers: Basic Flow steps 6 and 7.
 
+Work items:
+
+- [x] Save the layout of each Folder as it changes ([#7](https://github.com/karsanda/blueprint/issues/7))
+- [x] Restore the layout and the window's size and place when the Folder opens again ([#7](https://github.com/karsanda/blueprint/issues/7))
+
 Test cases:
 
 - Given a changed layout, when the Developer reopens the Folder, then the layout is the same.

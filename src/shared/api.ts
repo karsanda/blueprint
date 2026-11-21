@@ -37,6 +37,15 @@ export type StatusSignal =
   | { kind: 'interrupted' } // the transcript gained an interrupt line
   | { kind: 'typed' } // the Developer typed a key in the pane (renderer only)
 
+/** A Folder's window: the normal bounds, and whether it was maximized. */
+export interface WindowBounds {
+  x: number
+  y: number
+  width: number
+  height: number
+  maximized: boolean
+}
+
 export type ReviewRange = 'turn' | 'session'
 /** The Changes pane's range, and whether the Developer can see the pane. */
 export interface ReviewView {
@@ -87,4 +96,8 @@ export interface BlueprintApi {
   setReviewView(view: ReviewView): void
   /** The difference of one Change, by its path relative to the Folder. */
   reviewDiff(path: string): Promise<FileDiff>
+  /** The saved dockview layout of the open Folder, or null when there is none. */
+  getLayout(): Promise<unknown>
+  /** Saves the dockview layout (`toJSON()`) for the open Folder. */
+  saveLayout(layout: unknown): void
 }
