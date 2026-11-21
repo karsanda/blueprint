@@ -6,6 +6,8 @@ declare global {
   var openedUrls: string[] | undefined
   /** Notifications a test's stub of Notification.prototype.show received, in the main process. */
   var shown: Electron.Notification[] | undefined
+  /** How many times a shown notification was closed, counted by a test's wrapper of its close. */
+  var closedNotifications: number | undefined
   /** Calls a test's wrapper of the window's focus saw, in the main process. */
   var windowCalls: string[] | undefined
 

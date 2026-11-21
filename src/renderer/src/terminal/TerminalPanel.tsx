@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react'
 import type { TerminalKind } from '../../../shared/api'
 import { STATUS_LABEL } from '../status/labels'
 import { useClaudeStatus } from '../status/store'
-import { getSession } from './session'
+import { findSession, getSession } from './session'
 import { useTerminalStatus } from './status'
 import { TerminalNotice } from './TerminalNotice'
 
@@ -21,6 +21,37 @@ export function TerminalPanel({ api, params }: IDockviewPanelProps<TerminalParam
     if (host.current) session.attach(host.current)
     return () => session.detach()
   }, [api.id, params.kind])
+
+  // A tab the Developer clicks puts the keyboard in its terminal once its pane is visible, which is
+  // after dockview has laid out again; a hidden terminal cannot take focus.
+  useEffect(() => {
+    let waiting = false
+    const focus = () => {
+      waiting = false
+      const term = findSession(api.id)?.term
+      // The browser may still hold focus on the clicked tab for a frame or two, so keep asking until
+      // the terminal has it.
+      let frames = 0
+      const take = () => {
+        term?.focus()
+        if (api.isActive && term?.textarea && document.activeElement !== term.textarea && ++frames < 30) {
+          requestAnimationFrame(take)
+        }
+      }
+      take()
+    }
+    const subs = [
+      api.onDidActiveChange((e) => {
+        if (!e.isActive) waiting = false
+        else if (api.isVisible) focus()
+        else waiting = true
+      }),
+      api.onDidVisibilityChange((e) => {
+        if (e.isVisible && waiting) focus()
+      }),
+    ]
+    return () => subs.forEach((sub) => sub.dispose())
+  }, [api])
 
   return (
     <div className="flex h-full w-full flex-col bg-bp-sheet p-1.5" data-tab={api.id} data-status={claude}>

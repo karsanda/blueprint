@@ -50,9 +50,13 @@ export function closeClaudeSession(api: DockviewApi, tabId: string): void {
   if (api.panels.filter((p) => isClaudeTab(p.id)).length <= 1) return
   noteUsed(tabId)
   const panel = api.getPanel(tabId)
+  const hadFocus = panel?.api.isActive === true
   if (panel) api.removePanel(panel)
   findSession(tabId)?.dispose()
   window.blueprint.stopTerminal(tabId)
   useClaudeStatus.getState().set(tabId, undefined)
   useTerminalStatus.getState().clear(tabId)
+  // The Claude tab that takes its place gets the keyboard.
+  const next = hadFocus ? api.activePanel : undefined
+  if (next && isClaudeTab(next.id)) focusTab(api, next.id)
 }

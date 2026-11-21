@@ -339,3 +339,79 @@ test('a renamed session keeps its name after reopening', async () => {
     await second.app.close()
   }
 })
+
+test('closing the first Claude tab keeps the saved layout', async () => {
+  const first = await launch()
+  await expect.poll(() => probeText(first.page, 'claude-1')).toContain('claude ready')
+  await openSession(first.page, 'Claude', 'claude-2')
+  await rename(first.page, 'Claude 2', 'docs')
+  await closeAction(first.page, 'Claude').click()
+  await expect(tab(first.page, 'Claude')).toHaveCount(0)
+  await first.page.waitForTimeout(1000)
+  await first.app.close()
+
+  const second = await launch({ folder: first.folder, home: first.home })
+  try {
+    await expect(tab(second.page, 'docs')).toBeVisible()
+    await expect(second.page.locator('.dv-tab', { hasText: /^\s*⚠?\s*Claude\s*$/ })).toHaveCount(0)
+    await expect(tab(second.page, 'Changes')).toBeVisible()
+    await expect(tab(second.page, 'Difference')).toBeVisible()
+    await expect.poll(() => probeText(second.page, 'claude-2')).toContain('claude ready')
+  } finally {
+    await second.app.close()
+  }
+})
+
+/** Waits until the keyboard is in the tab's terminal, as the Developer sees the cursor there. */
+async function expectKeyboardIn(page: Page, tabId: string): Promise<void> {
+  await expect(page.locator(`[data-tab="${tabId}"] .xterm-helper-textarea`)).toBeFocused()
+}
+
+function promptsOf(log: string, hooks: string): number {
+  return readLog(log, hooks)
+    .split('\n')
+    .filter((l) => l.startsWith('UserPromptSubmit')).length
+}
+
+test("clicking a session's tab puts the keyboard in its terminal", async () => {
+  const { app, page, log } = await twoSessions()
+  await focusClaude(page, 'Claude')
+  await expectKeyboardIn(page, 'claude-1')
+  await page.keyboard.type('p')
+  await expect.poll(() => promptsOf(log, 'claude.hooks')).toBe(1)
+  await focusClaude(page, 'Claude 2')
+  await expectKeyboardIn(page, 'claude-2')
+  await page.keyboard.type('p')
+  await expect.poll(() => promptsOf(log, 'claude2.hooks')).toBe(1)
+  await expect.poll(() => promptsOf(log, 'claude.hooks')).toBe(1)
+  await app.close()
+})
+
+test('closing a session puts the keyboard in the tab that takes its place', async () => {
+  const { app, page, log } = await twoSessions()
+  await closeAction(page, 'Claude 2').click()
+  await expect(tab(page, 'Claude 2')).toHaveCount(0)
+  await expectKeyboardIn(page, 'claude-1')
+  await page.keyboard.type('p')
+  await expect.poll(() => promptsOf(log, 'claude.hooks')).toBe(1)
+  await app.close()
+})
+
+test("a closed session's notification is closed", async () => {
+  const { app, page } = await twoSessions()
+  await stubUnfocused(app)
+  await app.evaluate(({ Notification }) => {
+    globalThis.closedNotifications = 0
+    Notification.prototype.close = function () {
+      globalThis.closedNotifications = (globalThis.closedNotifications ?? 0) + 1
+    }
+  })
+  await typeInto(page, 'claude-2', 'p?')
+  await expect.poll(() => app.evaluate(() => globalThis.shown?.length)).toBe(1)
+  await focusClaude(page, 'Claude 2')
+  await closeAction(page, 'Claude 2').click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Close session' }).click()
+  await expect(tab(page, 'Claude 2')).toHaveCount(0)
+  await expect.poll(() => app.evaluate(() => globalThis.closedNotifications)).toBe(1)
+  await app.close()
+})

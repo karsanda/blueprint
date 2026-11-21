@@ -1,4 +1,5 @@
 import type { DockviewApi, SerializedDockview } from 'dockview-react'
+import { isClaudeTab } from './sessions'
 
 const SAVE_DELAY_MS = 500
 
@@ -27,7 +28,7 @@ function isExpected(api: DockviewApi, id: string): boolean {
 
 /**
  * Loads a saved layout. Gives `false`, with the dock cleared, when the JSON doesn't load, lacks
- * Claude, or holds a panel that isn't a default pane or a Claude session; the caller then adds the
+ * a Claude tab, or holds a panel that isn't a default pane or a Claude session; the caller then adds the
  * default panes.
  */
 export function restoreLayout(api: DockviewApi, saved: unknown): boolean {
@@ -38,7 +39,7 @@ export function restoreLayout(api: DockviewApi, saved: unknown): boolean {
     api.clear()
     return false
   }
-  if (!api.getPanel('claude-1') || !api.panels.every((p) => isExpected(api, p.id))) {
+  if (!api.panels.some((p) => isClaudeTab(p.id)) || !api.panels.every((p) => isExpected(api, p.id))) {
     api.clear()
     return false
   }

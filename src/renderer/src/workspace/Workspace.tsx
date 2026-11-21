@@ -82,7 +82,7 @@ function NameField({ name, onDone }: { name: string; onDone: (name: string | nul
       onPointerDown={(e) => e.stopPropagation()}
       onKeyDown={(e) => {
         e.stopPropagation()
-        if (e.key === 'Enter') finish(e.currentTarget.value)
+        if (e.key === 'Enter' && !e.nativeEvent.isComposing) finish(e.currentTarget.value)
         else if (e.key === 'Escape') finish(null)
       }}
       onBlur={(e) => finish(e.currentTarget.value)}
