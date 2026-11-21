@@ -18,8 +18,11 @@ test('the window comes back at the same size and place', async () => {
       BrowserWindow.getAllWindows()[0]?.getBounds(),
     )
     expect(bounds).toBeDefined()
-    expect(Math.abs((bounds?.x ?? 0) - 100)).toBeLessThanOrEqual(2)
-    expect(Math.abs((bounds?.y ?? 0) - 80)).toBeLessThanOrEqual(2)
+    // Wayland lets no app place its window, so there only the size comes back.
+    if (!(process.env['BLUEPRINT_E2E_HEADED'] === '1' && process.env['XDG_SESSION_TYPE'] === 'wayland')) {
+      expect(Math.abs((bounds?.x ?? 0) - 100)).toBeLessThanOrEqual(2)
+      expect(Math.abs((bounds?.y ?? 0) - 80)).toBeLessThanOrEqual(2)
+    }
     expect(Math.abs((bounds?.width ?? 0) - 1000)).toBeLessThanOrEqual(2)
     expect(Math.abs((bounds?.height ?? 0) - 700)).toBeLessThanOrEqual(2)
   } finally {
@@ -78,7 +81,11 @@ function claudeAndShell(extra: string[] = []): object {
     panels: Object.fromEntries(
       ids.map((id) => [
         id,
-        panel(id, id === 'shell-1' ? 'Shell' : id === 'claude-1' ? 'Claude' : id, 'shell'),
+        panel(
+          id,
+          id === 'shell-1' ? 'Shell' : id === 'claude-1' ? 'Claude' : id,
+          id === 'claude-1' ? 'claude' : 'shell',
+        ),
       ]),
     ),
     activeGroup: '1',
@@ -131,6 +138,7 @@ test('the layout is the same when the Developer reopens the Folder', async () =>
 test('a Folder opened for the first time gets the default layout', async () => {
   const first = await launch()
   await dropTab(first.page, 'Shell', 600, 300)
+  await expect(first.page.locator('.dv-groupview')).toHaveCount(3)
   await first.page.waitForTimeout(1000)
   await first.app.close()
 
@@ -139,6 +147,13 @@ test('a Folder opened for the first time gets the default layout', async () => {
     await expectDefault(second.page)
   } finally {
     await second.app.close()
+  }
+
+  const again = await launch({ folder: first.folder, home: first.home })
+  try {
+    await expect(again.page.locator('.dv-groupview')).toHaveCount(3)
+  } finally {
+    await again.app.close()
   }
 })
 
@@ -164,21 +179,72 @@ test('a layout saved without the review panes gets them back', async () => {
     await expect(groupWith(run.page, 'Changes')).toHaveCount(1)
     await expect(groupWith(run.page, 'Difference')).toHaveCount(1)
     expect(await tabTitles(groupWith(run.page, 'Claude'))).toEqual(['Claude', 'Shell'])
+    const [changes, claude, difference] = await Promise.all(
+      ['Changes', 'Claude', 'Difference'].map((t) => groupWith(run.page, t).boundingBox()),
+    )
+    expect(changes!.x + changes!.width).toBeLessThanOrEqual(claude!.x)
+    expect(difference!.x).toBeGreaterThanOrEqual(claude!.x + claude!.width)
+    // The saved active tab stays active, and the filled-in panes did not take the focus.
+    await expect(groupWith(run.page, 'Claude').locator('.dv-tab.dv-active-tab')).toHaveText('Claude')
+    await expect(groupWith(run.page, 'Claude')).toHaveClass(/dv-active-group/)
+    await expect.poll(() => probeText(run.page, 'claude-1')).toContain('claude ready')
+    // Terminals stay mounted (renderer: 'always') while Shell is the hidden tab of its group.
+    await expect(run.page.locator('[data-tab="shell-1"]')).toBeAttached()
+    await expect.poll(() => probeText(run.page, 'shell-1')).toContain('fake-shell ready')
   } finally {
     await run.app.close()
+  }
+})
+
+test('a layout whose Changes panel is a terminal gives the default layout', async () => {
+  const { folder, home, file } = await layoutFileOf()
+  const layout = { ...claudeAndShell(['changes']), panels: undefined as unknown }
+  layout.panels = Object.fromEntries(
+    ['claude-1', 'shell-1', 'changes'].map((id) => [
+      id,
+      panel(id, id, id === 'claude-1' ? 'claude' : 'shell'),
+    ]),
+  )
+  writeLayoutFile(file, folder, layout)
+  const run = await launch({ folder, home })
+  try {
+    await expectDefault(run.page)
+  } finally {
+    await run.app.close()
+  }
+})
+
+test('a layout change made just before closing is saved', async () => {
+  const first = await launch()
+  await expect(first.page.locator('.dv-groupview')).toHaveCount(4)
+  const cb = (await groupWith(first.page, 'Claude').boundingBox())!
+  await dropTab(first.page, 'Shell', cb.x + cb.width / 2, cb.y + cb.height / 2)
+  await expect(first.page.locator('.dv-groupview')).toHaveCount(3)
+  await first.app.close()
+
+  const second = await launch({ folder: first.folder, home: first.home })
+  try {
+    await expect(second.page.locator('.dv-groupview')).toHaveCount(3)
+  } finally {
+    await second.app.close()
   }
 })
 
 test('a Folder closed while zoomed reopens unzoomed', async () => {
   const first = await launch()
   await expect(first.page.locator('.dv-groupview')).toHaveCount(4)
+  const cb = (await groupWith(first.page, 'Claude').boundingBox())!
+  await dropTab(first.page, 'Shell', cb.x + cb.width / 2, cb.y + cb.height / 2)
+  await expect(first.page.locator('.dv-groupview')).toHaveCount(3)
+  await first.page.waitForTimeout(1000)
   await groupWith(first.page, 'Claude').getByTitle('Zoom pane').click()
+  await expect(first.page.getByTitle('Zoom out')).toHaveCount(1)
   await first.page.waitForTimeout(1000)
   await first.app.close()
 
   const second = await launch({ folder: first.folder, home: first.home })
   try {
-    await expect(second.page.locator('.dv-groupview')).toHaveCount(4)
+    await expect(second.page.locator('.dv-groupview')).toHaveCount(3)
     await expect(second.page.getByTitle('Zoom out')).toHaveCount(0)
     for (const g of await second.page.locator('.dv-groupview').all())
       expect(await width(g)).toBeGreaterThan(50)
@@ -195,7 +261,7 @@ test('a Folder picked after the window opened gets its window back', async () =>
   const run = await launch({ folder: null, home })
   try {
     await run.app.evaluate(({ dialog }, picked) => {
-      dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [picked] })) as never
+      dialog.showOpenDialog = () => Promise.resolve({ canceled: false, filePaths: [picked] })
     }, folder)
     await run.page.evaluate(() => window.blueprint.pickFolder())
     const bounds = await run.app.evaluate(({ BrowserWindow }) =>

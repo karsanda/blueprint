@@ -1,8 +1,5 @@
 import type { DockviewApi } from 'dockview-react'
 
-/** The panels Blueprint knows. A saved layout naming any other panel is not one Blueprint wrote. */
-export const DEFAULT_PANEL_IDS = ['claude-1', 'shell-1', 'changes', 'difference']
-
 /**
  * Adds each default pane that is missing, where the default layout puts it: Changes on the left at
  * full height, Claude and Difference side by side, and a shell below them both. A restored layout
@@ -10,6 +7,8 @@ export const DEFAULT_PANEL_IDS = ['claude-1', 'shell-1', 'changes', 'difference'
  */
 export function addDefaultPanels(api: DockviewApi): void {
   const fresh = !api.getPanel('claude-1')
+  // Panes filled into a restored layout don't take the active tab or group from it.
+  const inactive = !fresh
   if (fresh) {
     api.addPanel({
       id: 'claude-1',
@@ -25,6 +24,7 @@ export function addDefaultPanels(api: DockviewApi): void {
       component: 'changes',
       title: 'Changes',
       initialWidth: 250,
+      inactive,
       position: { referencePanel: 'claude-1', direction: 'left' },
     })
   }
@@ -35,6 +35,7 @@ export function addDefaultPanels(api: DockviewApi): void {
       title: 'Shell',
       params: { kind: 'shell' },
       renderer: 'always',
+      inactive,
       position: { referencePanel: 'claude-1', direction: 'below' },
     })
   }
@@ -43,6 +44,7 @@ export function addDefaultPanels(api: DockviewApi): void {
       id: 'difference',
       component: 'difference',
       title: 'Difference',
+      inactive,
       position: { referencePanel: 'claude-1', direction: 'right' },
     })
   }

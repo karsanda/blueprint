@@ -46,9 +46,15 @@ export function Workspace() {
       defaultTabComponent={BlueprintTab}
       onReady={(e) => {
         void (async () => {
-          const saved = await window.blueprint.getLayout().catch(() => null)
-          if (saved) restoreLayout(e.api, saved)
-          addDefaultPanels(e.api)
+          try {
+            const saved = await window.blueprint.getLayout().catch(() => null)
+            if (saved) restoreLayout(e.api, saved)
+            addDefaultPanels(e.api)
+          } catch {
+            // A layout that breaks the restore must not leave the window without its installers.
+            e.api.clear()
+            addDefaultPanels(e.api)
+          }
           installLayoutSaving(e.api)
           installTitle(e.api)
           installNotifications(e.api)
