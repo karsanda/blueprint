@@ -65,9 +65,19 @@ Test cases:
 
 Covers: Alternative Flow 1.
 
+Work items:
+
+- [ ] Switch the list between This turn and This session
+
 Test cases:
 
 - Given two prompts in one session, when the Developer chooses This session, then Changes from both turns are listed.
+
+## Known gaps
+
+- Claude Code can leave a command running in the background. Files it changes later show as changed outside Claude.
+- A file the Developer edits while Claude Code runs a command counts as Claude's.
+- A file that both Claude Code and the Developer changed shows as Claude's.
 
 ## Terms
 
