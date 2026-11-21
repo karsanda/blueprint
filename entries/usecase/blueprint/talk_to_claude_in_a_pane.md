@@ -43,10 +43,10 @@ Covers: Basic Flow, Alternative Flow 1, Alternative Flow 2, Alternative Flow 4.
 
 Work items:
 
-- [ ] Open a Folder from the command line or the folder picker
-- [ ] Run Claude Code in a pane, in the Blueprint look
-- [ ] Explain start failures and how to fix them
-- [ ] Offer a restart when Claude Code exits
+- [x] Open a Folder from the command line or the folder picker ([#1](https://github.com/karsanda/blueprint/issues/1))
+- [x] Run Claude Code in a pane, in the Blueprint look ([#1](https://github.com/karsanda/blueprint/issues/1))
+- [x] Explain start failures and how to fix them ([#1](https://github.com/karsanda/blueprint/issues/1))
+- [x] Offer a restart when Claude Code exits ([#1](https://github.com/karsanda/blueprint/issues/1))
 
 Test cases:
 

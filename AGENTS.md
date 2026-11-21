@@ -28,7 +28,10 @@ The format and both guides are adapted from the team's `vidio-usecase` repositor
 ├── scripts/                  check_links_integrity.sh (`task check`)
 ├── doc/
 │   ├── guides.md             use case concepts
-│   └── template.md           entry template
+│   ├── template.md           entry template
+│   └── plans/                one implementation plan per build step
+├── src/                      the app: main/ (Electron main process), preload/, renderer/ (React), shared/ (types)
+├── tests/e2e/                slice tests (Playwright) against the built app; fixtures/ holds fake programs
 └── entries/
     ├── system/blueprint.md   the System boundary
     ├── usecase/blueprint/<slug>.md  one use case
@@ -40,7 +43,13 @@ The format and both guides are adapted from the team's `vidio-usecase` repositor
     └── domain/<topic>/       notes with detail that needs code, e.g. review/notes.md
 ```
 
-App code will live next to `entries/` once the first slice is built.
+## Code
+
+- A slice's test cases become Playwright tests in `tests/e2e/`, each named after its Given / when / then line, run against the built app. Fake `claude` and shell programs in `tests/e2e/fixtures/` record what they receive. Tests read terminals through the e2e probe (`src/shared/probe.ts`), because WebGL draws them on a canvas.
+- Pure logic gets Vitest tests beside the source, as `*.test.ts`.
+- `pnpm dev -- <folder>` opens Blueprint on a Folder: the `--` hands the path to Electron.
+- `pnpm e2e` opens real windows on the desktop, one test at a time, and restores the clipboard it uses.
+- If `pnpm install` leaves Electron without its binary, run `node node_modules/electron/install.js`.
 
 ## Shared conventions
 
@@ -50,4 +59,5 @@ App code will live next to `entries/` once the first slice is built.
 ## Before you finish
 
 1. Run `task check` (or `sh scripts/check_links_integrity.sh`). It must print only `check-done`.
-2. List every file you changed in your report.
+2. After code changes, `pnpm typecheck && pnpm lint && pnpm format:check && pnpm test && pnpm e2e` passes.
+3. List every file you changed in your report.

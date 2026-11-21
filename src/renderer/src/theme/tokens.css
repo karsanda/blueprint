@@ -1,0 +1,110 @@
+@import 'tailwindcss';
+
+/* Blueprint Default scheme. Values from the prototype's blueprint-default tokens. */
+:root {
+  --bp-bg: #163b6a;
+  --bp-sheet: #0f2c52;
+  --bp-grid1: rgba(207, 227, 255, 0.07);
+  --bp-grid2: rgba(207, 227, 255, 0.15);
+  --bp-chrome: #dbe9ff;
+  --bp-head: #e3efff;
+  --bp-ink: #e6f0ff;
+  --bp-muted: #a2bde2;
+  --bp-line: #cfe3ff;
+  --bp-line-soft: rgba(207, 227, 255, 0.5);
+  --bp-line-faint: rgba(207, 227, 255, 0.3);
+  --bp-sel: rgba(207, 227, 255, 0.13);
+  --bp-agent: #ffd166;
+  --bp-on-agent: #0f2c52;
+  --bp-you: #a6d8ff;
+  --bp-wait: #ffa24c;
+  --bp-ok: #8fdc9c;
+  --bp-add: #8fdc9c;
+  --bp-del: #ff8a7a;
+  --bp-selection: rgba(207, 227, 255, 0.28);
+  --bp-font-ui: 'Overpass Variable', system-ui, sans-serif;
+  --bp-font-mono: 'Cascadia Code Variable', ui-monospace, monospace;
+}
+
+@theme inline {
+  --color-bp-bg: var(--bp-bg);
+  --color-bp-sheet: var(--bp-sheet);
+  --color-bp-chrome: var(--bp-chrome);
+  --color-bp-head: var(--bp-head);
+  --color-bp-ink: var(--bp-ink);
+  --color-bp-muted: var(--bp-muted);
+  --color-bp-line: var(--bp-line);
+  --color-bp-line-soft: var(--bp-line-soft);
+  --color-bp-line-faint: var(--bp-line-faint);
+  --color-bp-sel: var(--bp-sel);
+  --color-bp-agent: var(--bp-agent);
+  --color-bp-on-agent: var(--bp-on-agent);
+  --color-bp-wait: var(--bp-wait);
+  --color-bp-ok: var(--bp-ok);
+  --font-ui: var(--bp-font-ui);
+  --font-mono: var(--bp-font-mono);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    margin: 0;
+    background-color: var(--bp-bg);
+    color: var(--bp-ink);
+    font: 13px/1.45 var(--bp-font-ui);
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+@utility bp-grid {
+  background-color: var(--bp-bg);
+  background-image:
+    linear-gradient(var(--bp-grid2) 1px, transparent 1px),
+    linear-gradient(90deg, var(--bp-grid2) 1px, transparent 1px),
+    linear-gradient(var(--bp-grid1) 1px, transparent 1px),
+    linear-gradient(90deg, var(--bp-grid1) 1px, transparent 1px);
+  background-size:
+    100px 100px,
+    100px 100px,
+    20px 20px,
+    20px 20px;
+}
+
+/* shadcn/ui variables, mapped onto the Blueprint tokens. Corners are square everywhere. */
+:root {
+  --background: var(--bp-sheet);
+  --foreground: var(--bp-ink);
+  --primary: var(--bp-agent);
+  --primary-foreground: var(--bp-on-agent);
+  --secondary: var(--bp-sel);
+  --secondary-foreground: var(--bp-ink);
+  --muted: var(--bp-sel);
+  --muted-foreground: var(--bp-muted);
+  --destructive: var(--bp-del);
+  --border: var(--bp-line-soft);
+  --input: var(--bp-line-soft);
+  --ring: var(--bp-agent);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+}
