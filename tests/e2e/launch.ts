@@ -76,6 +76,8 @@ export async function launch(opts: LaunchOptions = {}): Promise<Launched> {
   })
   const page = await app.firstWindow()
   await page.waitForLoadState('domcontentloaded')
+  // The renderer installs the probe when its script runs, which can be after the DOM is loaded.
+  await page.waitForFunction(() => window.blueprintProbe !== undefined, undefined, { timeout: 15000 })
   return { app, page, log, folder: folder ?? '' }
 }
 
