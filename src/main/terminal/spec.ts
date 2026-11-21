@@ -10,8 +10,27 @@ export interface SpawnSpec {
   env: Record<string, string>
 }
 
-/** Variables that make Claude Code think it runs inside another Claude Code session. */
-const NESTING = ['CLAUDECODE', 'CLAUDE_CODE_ENTRYPOINT']
+/**
+ * Markers a running Claude Code session puts in its children's environment. They are set only
+ * when Blueprint itself starts inside a Claude Code session; passed on, they would make every
+ * session and shell in Blueprint look like a child of that one. Claude Code's own settings,
+ * such as CLAUDE_CODE_USE_BEDROCK, are kept.
+ */
+const NESTING = [
+  'CLAUDECODE',
+  'CLAUDE_CODE_ENTRYPOINT',
+  'CLAUDE_CODE_CHILD_SESSION',
+  'CLAUDE_CODE_CHILD_NOTES_DIR',
+  'CLAUDE_CODE_SESSION_ID',
+  'CLAUDE_CODE_SESSION_ATTENDED',
+  'CLAUDE_CODE_BRIDGE_SESSION_ID',
+  'CLAUDE_CODE_MESSAGING_SOCKET',
+  'CLAUDE_CODE_MESSAGING_TOKEN',
+  'CLAUDE_CODE_EXECPATH',
+  'CLAUDE_PID',
+  'CLAUDE_EFFORT',
+  'AI_AGENT',
+]
 
 export function terminalEnv(base: NodeJS.ProcessEnv): Record<string, string> {
   const env: Record<string, string> = {}

@@ -1,7 +1,8 @@
-import { mkdtempSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { delimiter, dirname, join, resolve } from 'node:path'
 import { _electron as electron, type ElectronApplication, type Page } from '@playwright/test'
+import type { TerminalProbe } from '../../src/shared/probe'
 
 export interface Launched {
   app: ElectronApplication
@@ -13,10 +14,20 @@ export interface Launched {
 export interface LaunchOptions {
   /** The Folder argument. Defaults to a fresh temp dir; `null` passes no Folder. */
   folder?: string | null
+  /** `fake` puts the fake `claude` first on PATH; `no-claude` leaves any `claude` off PATH. */
+  path?: 'fake' | 'no-claude'
   args?: string[]
 }
 
 const root = resolve(__dirname, '../..')
+const fixtureBin = join(root, 'tests/e2e/fixtures/bin')
+
+function noClaudePath(): string {
+  const dirs = [dirname(process.execPath), '/usr/bin', '/bin']
+  const found = dirs.find((d) => existsSync(join(d, 'claude')))
+  if (found) throw new Error(`Cannot test a missing claude: ${found} has one`)
+  return dirs.join(delimiter)
+}
 
 function definedEnv(env: NodeJS.ProcessEnv): Record<string, string> {
   return Object.fromEntries(Object.entries(env).filter((e): e is [string, string] => e[1] !== undefined))
@@ -30,6 +41,9 @@ export async function launch(opts: LaunchOptions = {}): Promise<Launched> {
   const env: Record<string, string> = {
     ...definedEnv(process.env),
     HOME: home,
+    PATH:
+      opts.path === 'no-claude' ? noClaudePath() : `${fixtureBin}${delimiter}${process.env['PATH'] ?? ''}`,
+    SHELL: join(fixtureBin, 'fake-shell'),
     BLUEPRINT_E2E: '1',
     BLUEPRINT_TEST_LOG: log,
   }
@@ -46,4 +60,37 @@ export async function launch(opts: LaunchOptions = {}): Promise<Launched> {
   const page = await app.firstWindow()
   await page.waitForLoadState('domcontentloaded')
   return { app, page, log, folder: folder ?? '' }
+}
+
+/** A file the fake programs wrote, or '' when it doesn't exist yet. */
+export function readLog(log: string, file: string): string {
+  try {
+    return readFileSync(join(log, file), 'utf8')
+  } catch {
+    return ''
+  }
+}
+
+function probe(): TerminalProbe {
+  const p = window.blueprintProbe
+  if (!p) throw new Error('No e2e probe: is BLUEPRINT_E2E=1 set?')
+  return p
+}
+
+export async function probeText(page: Page, tabId: string): Promise<string> {
+  return page.evaluate(`(${probe.toString()})().text(${JSON.stringify(tabId)})`)
+}
+
+export async function probeSize(page: Page, tabId: string): Promise<{ cols: number; rows: number } | null> {
+  return page.evaluate(`(${probe.toString()})().size(${JSON.stringify(tabId)})`)
+}
+
+export async function probeCall(page: Page, method: 'focus' | 'selectAll', tabId: string): Promise<void> {
+  await page.evaluate(`(${probe.toString()})().${method}(${JSON.stringify(tabId)})`)
+}
+
+/** Focuses a tab's terminal and types into it like the Developer would. */
+export async function typeInto(page: Page, tabId: string, text: string): Promise<void> {
+  await probeCall(page, 'focus', tabId)
+  await page.keyboard.type(text)
 }

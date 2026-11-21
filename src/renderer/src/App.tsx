@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { FolderState } from '../../shared/api'
 import { OpenFolder } from './OpenFolder'
+import { Workspace } from './workspace/Workspace'
 
 export function App() {
   const [state, setState] = useState<FolderState | null>(null)
@@ -18,6 +19,7 @@ export function App() {
         {state?.folder && <span className="font-mono text-[11.5px] text-bp-muted">{state.folder}</span>}
       </header>
       <main className="min-h-0 flex-1">
+        {state?.folder && <Workspace />}
         {state && !state.folder && <OpenFolder problem={state.problem} onPick={pick} />}
       </main>
     </div>

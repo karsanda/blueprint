@@ -25,6 +25,27 @@ test('terminalEnv drops the Claude Code nesting variables', () => {
   expect(env).toEqual({ FOO: 'x', TERM: 'xterm-256color', COLORTERM: 'truecolor' })
 })
 
+test("terminalEnv drops the parent session's markers but keeps Claude Code settings", () => {
+  const markers = [
+    'CLAUDE_CODE_CHILD_SESSION',
+    'CLAUDE_CODE_CHILD_NOTES_DIR',
+    'CLAUDE_CODE_SESSION_ID',
+    'CLAUDE_CODE_SESSION_ATTENDED',
+    'CLAUDE_CODE_BRIDGE_SESSION_ID',
+    'CLAUDE_CODE_MESSAGING_SOCKET',
+    'CLAUDE_CODE_MESSAGING_TOKEN',
+    'CLAUDE_CODE_EXECPATH',
+    'CLAUDE_PID',
+    'CLAUDE_EFFORT',
+    'AI_AGENT',
+  ]
+  const env = terminalEnv({
+    ...Object.fromEntries(markers.map((m) => [m, 'x'])),
+    CLAUDE_CODE_USE_BEDROCK: '1',
+  })
+  expect(env).toEqual({ CLAUDE_CODE_USE_BEDROCK: '1', TERM: 'xterm-256color', COLORTERM: 'truecolor' })
+})
+
 test('claudeSpec explains a missing claude', () => {
   expect(claudeSpec('/work/proj', { PATH: bin, HOME: bin }, 'abc')).toEqual({
     reason: 'not-installed',

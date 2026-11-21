@@ -18,6 +18,8 @@ function createWindow(): BrowserWindow {
       nodeIntegration: false,
     },
   })
+  // Blueprint asks for no browser permissions. Denying them also keeps the ligatures add-on on its built-in list.
+  win.webContents.session.setPermissionRequestHandler((_wc, _permission, done) => done(false))
   win.once('ready-to-show', () => win.show())
   const devUrl = process.env['ELECTRON_RENDERER_URL']
   if (!app.isPackaged && devUrl) void win.loadURL(devUrl)

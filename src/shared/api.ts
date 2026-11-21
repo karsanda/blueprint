@@ -28,6 +28,8 @@ export interface ExitInfo {
 
 /** The API the preload script exposes to the renderer as `window.blueprint`. */
 export interface BlueprintApi {
+  /** True when e2e tests run the app (BLUEPRINT_E2E=1). */
+  e2e: boolean
   getFolder(): Promise<FolderState>
   pickFolder(): Promise<FolderState>
   startTerminal(req: StartRequest): Promise<StartResult>

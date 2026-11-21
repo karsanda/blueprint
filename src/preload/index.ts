@@ -14,6 +14,7 @@ function onTab<T>(channel: string, tabId: string, cb: (value: T) => void): () =>
 }
 
 const api: BlueprintApi = {
+  e2e: process.env['BLUEPRINT_E2E'] === '1',
   getFolder: (): Promise<FolderState> => ipcRenderer.invoke('folder:get'),
   pickFolder: (): Promise<FolderState> => ipcRenderer.invoke('folder:pick'),
   startTerminal: (req: StartRequest): Promise<StartResult> => ipcRenderer.invoke('terminal:start', req),

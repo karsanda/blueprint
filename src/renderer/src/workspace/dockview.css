@@ -1,0 +1,22 @@
+/* Blueprint colors for dockview. Task 9 adds the drafting details. */
+.dockview-theme-blueprint {
+  --dv-background-color: transparent;
+  --dv-group-view-background-color: var(--bp-sheet);
+  --dv-tabs-and-actions-container-background-color: var(--bp-sheet);
+  --dv-tabs-and-actions-container-font-size: 10.5px;
+  --dv-tabs-and-actions-container-height: 28px;
+  --dv-activegroup-visiblepanel-tab-background-color: var(--bp-bg);
+  --dv-activegroup-hiddenpanel-tab-background-color: var(--bp-sheet);
+  --dv-inactivegroup-visiblepanel-tab-background-color: var(--bp-bg);
+  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--bp-sheet);
+  --dv-activegroup-visiblepanel-tab-color: var(--bp-ink);
+  --dv-activegroup-hiddenpanel-tab-color: var(--bp-muted);
+  --dv-inactivegroup-visiblepanel-tab-color: var(--bp-muted);
+  --dv-inactivegroup-hiddenpanel-tab-color: var(--bp-muted);
+  --dv-separator-border: transparent;
+  --dv-paneview-header-border-color: var(--bp-line-faint);
+  --dv-tab-divider-color: var(--bp-line-faint);
+  --dv-drag-over-background-color: var(--bp-sel);
+  --dv-drag-over-border-color: var(--bp-line);
+  padding: 0 14px 14px;
+}
