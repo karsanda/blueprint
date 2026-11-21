@@ -37,6 +37,14 @@ const api: BlueprintApi = {
     }
   },
   writeClipboard: (text) => ipcRenderer.send('clipboard:write', text),
+  notify: (tabId, tabTitle) => ipcRenderer.send('status:notify', tabId, tabTitle),
+  onFocusTab: (cb) => {
+    const listener = (_e: IpcRendererEvent, tabId: string): void => cb(tabId)
+    ipcRenderer.on('status:focus', listener)
+    return () => {
+      ipcRenderer.off('status:focus', listener)
+    }
+  },
 }
 
 contextBridge.exposeInMainWorld('blueprint', api)

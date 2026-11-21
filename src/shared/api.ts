@@ -51,4 +51,8 @@ export interface BlueprintApi {
   /** Every status signal main learned about any Claude session, with the tab it belongs to. */
   onStatusSignal(cb: (tabId: string, signal: StatusSignal) => void): () => void
   writeClipboard(text: string): void
+  /** Asks for a desktop notification that a session needs the Developer. */
+  notify(tabId: string, tabTitle: string): void
+  /** Main asks to bring a session forward, after the Developer clicked its notification. */
+  onFocusTab(cb: (tabId: string) => void): () => void
 }

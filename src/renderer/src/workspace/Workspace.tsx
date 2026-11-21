@@ -7,6 +7,7 @@ import {
   type IDockviewPanelHeaderProps,
 } from 'dockview-react'
 import { StatusLight } from '../status/StatusLight'
+import { installNotifications } from '../status/notify'
 import { installTitle } from '../status/title'
 import { TerminalPanel } from '../terminal/TerminalPanel'
 import { addDefaultPanels } from './defaultLayout'
@@ -39,6 +40,7 @@ export function Workspace() {
       onReady={(e) => {
         addDefaultPanels(e.api)
         installTitle(e.api)
+        installNotifications(e.api)
       }}
     />
   )

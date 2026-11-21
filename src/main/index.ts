@@ -1,7 +1,8 @@
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { app, BrowserWindow, Menu, shell } from 'electron'
 import { resolveFolder } from './folder'
-import { registerIpc } from './ipc'
+import { type IpcDeps, registerIpc } from './ipc'
+import { NeedsYouNotifier } from './notify'
 import { hookSettings, writeHookSettings } from './status/hooks'
 import { startHookListener } from './status/listener'
 import { StatusRelay } from './status/relay'
@@ -64,7 +65,19 @@ void app.whenReady().then(async () => {
     data: (tabId, data) => send('terminal:data', tabId, data),
     exit: (tabId, exit) => send('terminal:exit', tabId, exit),
   })
-  registerIpc(win, { folder, manager, relay, settingsFile: settings.file })
+  const deps: IpcDeps = {
+    folder,
+    manager,
+    relay,
+    // The ipc module swaps in the Folder the Developer picks, so the notifier reads it through deps.
+    notifier: new NeedsYouNotifier(
+      win,
+      () => basename(deps.folder.folder ?? ''),
+      (tabId) => send('status:focus', tabId),
+    ),
+    settingsFile: settings.file,
+  }
+  registerIpc(win, deps)
   // Both events fire on quit, so the cleanup runs once.
   let cleaned = false
   const cleanUp = (): void => {

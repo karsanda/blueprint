@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { type BrowserWindow, clipboard, dialog, ipcMain } from 'electron'
 import type { FolderState, StartRequest, StartResult } from '../shared/api'
+import type { NeedsYouNotifier } from './notify'
 import type { StatusRelay } from './status/relay'
 import type { TerminalManager } from './terminal/manager'
 import { claudeSpec, shellSpec } from './terminal/spec'
@@ -9,6 +10,7 @@ export interface IpcDeps {
   folder: FolderState
   manager: TerminalManager
   relay: StatusRelay
+  notifier: NeedsYouNotifier
   /** Claude Code settings that carry Blueprint's hooks. */
   settingsFile: string
 }
@@ -28,6 +30,8 @@ export function registerIpc(win: BrowserWindow, deps: IpcDeps): void {
   ipcMain.on('terminal:resize', (_e, tabId: string, cols: number, rows: number) =>
     deps.manager.resize(tabId, cols, rows),
   )
+
+  ipcMain.on('status:notify', (_e, tabId: string, tabTitle: string) => deps.notifier.notify(tabId, tabTitle))
 
   ipcMain.on('clipboard:write', (_e, text: string) => clipboard.writeText(text))
 }
