@@ -1,23 +1,16 @@
 ---
 type: Note
 title: Use case context
-description: How Blueprint finds use cases and hands one to a Claude session
+description: Why Blueprint has no use case feature, and what a check against Claude Code found
 ---
 
-Code-level detail for [Give Claude a use case as context](../../usecase/blueprint/give_claude_a_use_case.md).
+Code-level detail for [Give Claude a use case as context](../../usecase/blueprint/give_claude_a_use_case.md), which is retired: Claude Code handles use cases itself, through `@` file mentions and the Folder's own skills.
 
-## Finding use cases
+## What Claude Code 2.1.330 does with a pasted mention
 
-- Look for Markdown files under `entries/usecase/` in the Folder, at any depth, whose frontmatter has `type: Usecase`. This matches this repository and `vidio-usecase`.
-- Read `title`, `labels` and `status` from the frontmatter, and the `## Slice n: <name>` headings from the body.
-- When nothing matches, the empty state names `entries/usecase/` as the place Blueprint looks.
+Checked before the use case was retired, in case a feature comes back that writes into a session's prompt:
 
-## Handing one to a session
-
-- Blueprint types an `@<path>` file mention into the chosen session's prompt, for example `@entries/usecase/blueprint/review_what_claude_changed.md`. Claude Code reads mentioned files itself.
-- With a slice, it adds the slice name after the mention, for example `(Slice 1: This turn)`.
-- The text goes in as a bracketed paste and is not submitted, so the Developer finishes the prompt.
-
-## Later
-
-- Writing insights back to the use case after a session (the feedback flywheel) is a separate use case after the MVP.
+- A bracketed paste of `@entries/usecase/blueprint/<slug>.md (Slice 1: <name>)` into an idle session's prompt lands as plain text, with no file suggestions open. On submit, Claude Code reads the file before the turn starts.
+- A path with a space works as `@"<path>"`.
+- While the session is working, the paste waits in the prompt box.
+- While a permission question shows, the paste is dropped without a trace. The question stays unanswered, even though the text holds a digit.
