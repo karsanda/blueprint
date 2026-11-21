@@ -16,6 +16,7 @@ import { DifferencePanel } from '../review/DifferencePanel'
 import { StatusLight } from '../status/StatusLight'
 import { installNotifications } from '../status/notify'
 import { installTitle } from '../status/title'
+import { findSession } from '../terminal/session'
 import { TerminalPanel } from '../terminal/TerminalPanel'
 import { addDefaultPanels } from './defaultLayout'
 import { installLayoutSaving, restoreLayout } from './persist'
@@ -106,7 +107,20 @@ function BlueprintTab(props: IDockviewPanelHeaderProps) {
     if (name) props.api.setTitle(name)
   }
   return (
-    <div className="bp-tab" onDoubleClick={isClaude ? () => setEditing(true) : undefined}>
+    <div
+      className="bp-tab"
+      onMouseDown={(e) => {
+        // The press moves the browser's focus onto the tab; a tab that is already active fires no
+        // activation event, so put the keyboard back in its terminal once that has happened. A press on the
+        // close action is left alone.
+        if (editing || (e.target instanceof Element && e.target.closest('.dv-default-tab-action'))) return
+        requestAnimationFrame(() => {
+          if (document.activeElement?.classList.contains('bp-tab-name')) return
+          findSession(props.api.id)?.term?.focus()
+        })
+      }}
+      onDoubleClick={isClaude ? () => setEditing(true) : undefined}
+    >
       <StatusLight tabId={props.api.id} />
       <OverlapMark tabId={props.api.id} />
       {editing ? (

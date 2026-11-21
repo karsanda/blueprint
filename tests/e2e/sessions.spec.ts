@@ -412,6 +412,17 @@ test("clicking a session's tab in another pane puts the keyboard in its terminal
   await app.close()
 })
 
+test("clicking a terminal's already-active tab puts the keyboard in its terminal", async () => {
+  const { app, page, log } = await twoSessions()
+  await clickTab(page, 'Claude')
+  await expectKeyboardIn(page, 'claude-1')
+  await clickTab(page, 'Claude')
+
+  await page.keyboard.type('p')
+  await expect.poll(() => promptsOf(log, 'claude.hooks')).toBe(1)
+  await app.close()
+})
+
 test("a fast double-click on an inactive session's tab opens its name field and keeps it", async () => {
   const { app, page } = await twoSessions()
   await page
