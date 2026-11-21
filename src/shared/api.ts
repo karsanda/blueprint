@@ -37,6 +37,32 @@ export type StatusSignal =
   | { kind: 'interrupted' } // the transcript gained an interrupt line
   | { kind: 'typed' } // the Developer typed a key in the pane (renderer only)
 
+export type ReviewRange = 'turn' | 'session'
+/** The Changes pane's range, and whether the Developer can see the pane. */
+export interface ReviewView {
+  range: ReviewRange
+  visible: boolean
+}
+/** A Change as the review lists it. The path is relative to the Folder, with `/`. Counts are 0 for a binary file. */
+export interface Change {
+  path: string
+  /** Git's id of the file's content: the new content, or the removed content for a deleted file. */
+  id: string
+  kind: 'added' | 'modified' | 'deleted'
+  added: number
+  removed: number
+  binary: boolean
+  byClaude: boolean
+}
+export type ReviewState =
+  | { kind: 'no-git'; message: string }
+  | { kind: 'waiting'; message: string }
+  | { kind: 'changes'; range: ReviewRange; changes: Change[] }
+export type FileDiff =
+  | { kind: 'text'; patch: string; byClaude: boolean }
+  | { kind: 'binary' }
+  | { kind: 'none' }
+
 /** The API the preload script exposes to the renderer as `window.blueprint`. */
 export interface BlueprintApi {
   /** True when e2e tests run the app (BLUEPRINT_E2E=1). */
@@ -55,4 +81,10 @@ export interface BlueprintApi {
   notify(tabId: string, tabTitle: string): void
   /** Main asks to bring a session forward, after the Developer clicked its notification. */
   onFocusTab(cb: (tabId: string) => void): () => void
+  /** Every state the review reaches, as the Changes pane should show it. */
+  onReviewUpdate(cb: (state: ReviewState) => void): () => void
+  /** Tells main which range the Changes pane shows and whether the Developer can see it. */
+  setReviewView(view: ReviewView): void
+  /** The difference of one Change, by its path relative to the Folder. */
+  reviewDiff(path: string): Promise<FileDiff>
 }

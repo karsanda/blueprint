@@ -4,6 +4,7 @@ import './theme/tokens.css'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
+import { installReview } from './review/install'
 import { installStatus } from './status/install'
 import { installProbe } from './terminal/probe'
 
@@ -15,6 +16,7 @@ await Promise.all([
 
 installProbe()
 installStatus()
+installReview()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -48,10 +48,10 @@ Covers: Basic Flow, Alternative Flow 2, Alternative Flow 3, Alternative Flow 4, 
 
 Work items:
 
-- [ ] Record the Folder's state on each prompt
-- [ ] List each Change since the prompt, with who made it
-- [ ] Show the difference with revision clouds on Claude's changes
-- [ ] Refresh the list and the difference when files change
+- [x] Record the Folder's state on each prompt
+- [x] List each Change since the prompt, with who made it
+- [x] Show the difference with revision clouds on Claude's changes
+- [x] Refresh the list and the difference when files change
 
 Test cases:
 
@@ -65,9 +65,22 @@ Test cases:
 
 Covers: Alternative Flow 1.
 
+Work items:
+
+- [x] Switch the list between This turn and This session
+
 Test cases:
 
 - Given two prompts in one session, when the Developer chooses This session, then Changes from both turns are listed.
+
+## Known gaps
+
+- Claude Code can leave a command running in the background. Files it changes later show as changed outside Claude.
+- A file the Developer edits while Claude Code runs a command, or waits to run one, counts as Claude's.
+- A file that both Claude Code and the Developer changed shows as Claude's.
+- Files that Claude Code changes through tools from other programs show as changed outside Claude.
+- Files stored with Git LFS are not listed.
+- In a very large Folder, Claude's first changes after a start or a prompt may not be listed.
 
 ## Terms
 

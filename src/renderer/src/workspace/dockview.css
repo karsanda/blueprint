@@ -128,3 +128,154 @@
 .bp-light[data-status='idle'] {
   border: 1px solid var(--bp-muted);
 }
+
+/* The Changes pane: a range switch, then one row per Change. */
+.bp-changes {
+  height: 100%;
+  overflow: auto;
+  padding: 6px;
+  font-family: var(--bp-font-ui);
+  font-size: 12px;
+  color: var(--bp-ink);
+}
+.bp-changes-head {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.bp-changes-head button {
+  padding: 2px 8px;
+  border: 1px solid var(--bp-line-faint);
+  font: 600 9.5px var(--bp-font-ui);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--bp-muted);
+}
+.bp-changes-head button[aria-pressed='true'] {
+  border-color: var(--bp-line);
+  color: var(--bp-head);
+  background: var(--bp-sel);
+}
+.bp-changes-note {
+  color: var(--bp-muted);
+}
+.bp-changes-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.bp-changes-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+.bp-changes-list li:hover,
+.bp-changes-list li[data-picked='true'] {
+  background: var(--bp-sel);
+}
+.bp-mark-claude {
+  color: var(--bp-agent);
+}
+.bp-mark-outside {
+  color: var(--bp-muted);
+}
+.bp-change-kind {
+  font-weight: 600;
+  color: var(--bp-muted);
+}
+.bp-change-kind[data-kind='added'] {
+  color: var(--bp-add);
+}
+.bp-change-kind[data-kind='deleted'] {
+  color: var(--bp-del);
+}
+.bp-change-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--bp-font-mono);
+  font-size: 11px;
+}
+.bp-change-count {
+  flex: none;
+  font-family: var(--bp-font-mono);
+  font-size: 10.5px;
+  color: var(--bp-muted);
+}
+
+/* The Difference pane: one row per line, a revision cloud round each block Claude changed. */
+.bp-diff {
+  --bp-code-foreground: var(--bp-ink);
+  --bp-code-background: transparent;
+  --bp-code-token-constant: var(--bp-you);
+  --bp-code-token-string: var(--bp-ok);
+  --bp-code-token-comment: var(--bp-muted);
+  --bp-code-token-keyword: var(--bp-wait);
+  --bp-code-token-parameter: var(--bp-ink);
+  --bp-code-token-function: var(--bp-agent);
+  --bp-code-token-string-expression: var(--bp-ok);
+  --bp-code-token-punctuation: var(--bp-muted);
+  --bp-code-token-link: var(--bp-you);
+}
+.bp-diff-path {
+  margin-bottom: 6px;
+  font: 600 11px var(--bp-font-mono);
+  color: var(--bp-head);
+}
+.bp-diff-rows {
+  min-width: max-content;
+  padding: 0 20px 0 20px;
+  font: 11px/1.5 var(--bp-font-mono);
+}
+.bp-chg {
+  position: relative;
+  margin: 12px 0;
+}
+.bp-cloud {
+  position: absolute;
+  pointer-events: none;
+  overflow: visible;
+}
+.bp-cloud path {
+  fill: none;
+  stroke: var(--bp-agent);
+  stroke-width: 1.6px;
+  stroke-linejoin: round;
+}
+.bp-diff-row {
+  display: flex;
+  white-space: pre;
+}
+.bp-diff-row[data-kind='add'] {
+  background: color-mix(in srgb, var(--bp-add) 16%, transparent);
+}
+.bp-diff-row[data-kind='del'] {
+  background: color-mix(in srgb, var(--bp-del) 16%, transparent);
+}
+.bp-diff-row[data-kind='hunk'] {
+  color: var(--bp-muted);
+}
+/* Five digits and a 1ch gap: the box includes its padding. */
+.bp-diff-num {
+  flex: none;
+  width: 6ch;
+  padding-right: 1ch;
+  text-align: right;
+  color: var(--bp-muted);
+  user-select: none;
+}
+.bp-diff-sign {
+  flex: none;
+  width: 2ch;
+  color: var(--bp-muted);
+}
+.bp-diff-row[data-kind='add'] .bp-diff-sign {
+  color: var(--bp-add);
+}
+.bp-diff-row[data-kind='del'] .bp-diff-sign {
+  color: var(--bp-del);
+}

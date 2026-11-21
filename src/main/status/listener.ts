@@ -19,13 +19,32 @@ function parseHookInput(body: string): HookInput | null {
   try {
     const value: unknown = JSON.parse(body)
     if (!isRecord(value)) return null
-    const { hook_event_name, session_id, transcript_path, notification_type } = value
+    const {
+      hook_event_name,
+      session_id,
+      transcript_path,
+      notification_type,
+      prompt,
+      tool_name,
+      tool_use_id,
+    } = value
     if (typeof hook_event_name !== 'string' || typeof session_id !== 'string') return null
+    const input = isRecord(value['tool_input']) ? value['tool_input'] : {}
+    const file_path =
+      typeof input['file_path'] === 'string'
+        ? input['file_path']
+        : typeof input['notebook_path'] === 'string'
+          ? input['notebook_path']
+          : undefined
     return {
       hook_event_name,
       session_id,
       ...(typeof transcript_path === 'string' && { transcript_path }),
       ...(typeof notification_type === 'string' && { notification_type }),
+      ...(typeof prompt === 'string' && { prompt }),
+      ...(typeof tool_name === 'string' && { tool_name }),
+      ...(typeof tool_use_id === 'string' && { tool_use_id }),
+      ...(file_path !== undefined && { file_path }),
     }
   } catch {
     return null
@@ -52,10 +71,10 @@ function readBody(req: IncomingMessage, res: ServerResponse, onBody: (body: stri
 
 /**
  * Listens on 127.0.0.1 for Claude Code's HTTP hooks, posted to /hook/<startKey>. Requests need the
- * bearer token. Replies are always empty.
+ * bearer token. Replies are always empty, and wait for the handler to finish.
  */
 export async function startHookListener(
-  onEvent: (startKey: string, e: HookInput) => void,
+  onEvent: (startKey: string, e: HookInput) => void | Promise<void>,
 ): Promise<HookListener> {
   const token = randomBytes(24).toString('hex')
   const server = createServer((req, res) => {
@@ -69,14 +88,20 @@ export async function startHookListener(
       return
     }
     readBody(req, res, (body) => {
-      res.writeHead(204).end()
       const event = parseHookInput(body)
-      if (!event) return
-      try {
-        onEvent(startKey, event)
-      } catch {
-        // A failing handler must not take the main process down.
+      if (!event) {
+        res.writeHead(204).end()
+        return
       }
+      // The reply waits for the handler, so a hook can hold Claude Code until the handler is done.
+      void (async () => {
+        try {
+          await onEvent(startKey, event)
+        } catch {
+          // A failing handler must not take the main process down.
+        }
+        if (!res.writableEnded && !res.destroyed) res.writeHead(204).end()
+      })()
     })
   })
   await new Promise<void>((resolve, reject) => {

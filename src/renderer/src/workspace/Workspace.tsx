@@ -6,6 +6,8 @@ import {
   type DockviewTheme,
   type IDockviewPanelHeaderProps,
 } from 'dockview-react'
+import { ChangesPanel } from '../review/ChangesPanel'
+import { DifferencePanel } from '../review/DifferencePanel'
 import { StatusLight } from '../status/StatusLight'
 import { installNotifications } from '../status/notify'
 import { installTitle } from '../status/title'
@@ -14,7 +16,11 @@ import { addDefaultPanels } from './defaultLayout'
 import { ZoomAction } from './ZoomAction'
 
 const blueprintTheme: DockviewTheme = { name: 'blueprint', className: 'dockview-theme-blueprint', gap: 6 }
-const components = { terminal: TerminalPanel }
+const components = {
+  terminal: TerminalPanel,
+  changes: ChangesPanel,
+  difference: DifferencePanel,
+}
 
 /**
  * Tabs without a close action (button or middle-click). Closing a tab would leave its program

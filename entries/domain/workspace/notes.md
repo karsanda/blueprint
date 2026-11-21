@@ -7,6 +7,7 @@ description: How Blueprint lays out panes and tabs, and remembers them
 Code-level detail for [Arrange my panes](../../usecase/blueprint/arrange_my_panes.md) and [Run commands in a shell pane](../../usecase/blueprint/run_commands_in_a_shell_pane.md).
 
 - Layout: dockview (React). Panes are dockview groups, tabs are dockview panels. dockview handles drop zones, splits, resize handles, floating groups and pop-out windows.
+- Default layout: Changes, a narrow pane on the left at full height; Claude in the middle and Difference on the right; Shell below them both. The Changes and Difference panes are described in [Review](../review/notes.md).
 - Terminal tabs stay mounted when hidden (dockview `renderer: 'always'`). Only visible terminals should keep a WebGL renderer, because Chromium allows about 16 WebGL contexts; that matters once several sessions run, and is not built yet.
 - Blueprint has no app menu: Electron's default one would take Ctrl+W, Ctrl+R and Ctrl+V from the terminals.
 - Copy is Ctrl+Shift+C, handled by Blueprint. Paste is Chromium's own Ctrl+Shift+V and Shift+Insert: xterm receives them as a paste event and adds bracketed-paste marks. Handling paste in Blueprint as well would paste twice.

@@ -21,6 +21,8 @@ async function start() {
 const post = (l: HookListener, body: string, auth: string | null = `Bearer ${l.token}`, key = 'k1') =>
   fetch(`${l.url}/${key}`, { method: 'POST', body, headers: auth ? { Authorization: auth } : {} })
 
+const stopBody = (id: string) => JSON.stringify({ hook_event_name: 'Stop', session_id: id })
+
 describe('hook listener', () => {
   it('passes a hook event on and answers 204 with no body', async () => {
     const { events, keys, l } = await start()
@@ -53,6 +55,47 @@ describe('hook listener', () => {
     expect((await post(listener, body)).status).toBe(204)
     expect((await post(listener, body)).status).toBe(204)
     await expect.poll(() => calls).toBe(2)
+  })
+
+  it('reads the fields review needs', async () => {
+    const { events, l } = await start()
+    const base = {
+      hook_event_name: 'PreToolUse',
+      session_id: 's1',
+      prompt: 'hi',
+      tool_name: 'Bash',
+      tool_use_id: 'tu1',
+    }
+    await post(l, JSON.stringify({ ...base, tool_input: { file_path: '/f/a.txt' } }))
+    await post(l, JSON.stringify({ ...base, tool_input: { notebook_path: '/f/n.ipynb' } }))
+    await expect.poll(() => events.length).toBe(2)
+    expect(events[0]).toEqual({ ...base, file_path: '/f/a.txt' })
+    expect(events[1]).toEqual({ ...base, file_path: '/f/n.ipynb' })
+  })
+
+  it('waits for the handler before replying', async () => {
+    listener = await startHookListener(() => new Promise<void>((r) => setTimeout(r, 300)))
+    const started = Date.now()
+    const res = await post(listener, JSON.stringify({ hook_event_name: 'Stop', session_id: 's1' }))
+    expect(Date.now() - started).toBeGreaterThanOrEqual(250)
+    expect(res.status).toBe(204)
+  })
+
+  it('replies when the handler fails', async () => {
+    const seen: string[] = []
+    let mode = 'reject'
+    listener = await startHookListener(async (_k, e) => {
+      await Promise.resolve()
+      if (mode === 'reject') throw new Error('no')
+      if (mode === 'throw') throw new Error('boom')
+      seen.push(e.session_id)
+    })
+    expect((await post(listener, stopBody('a'))).status).toBe(204)
+    mode = 'throw'
+    expect((await post(listener, stopBody('b'))).status).toBe(204)
+    mode = 'ok'
+    expect((await post(listener, stopBody('c'))).status).toBe(204)
+    expect(seen).toEqual(['c'])
   })
 
   it('refuses requests without the token', async () => {

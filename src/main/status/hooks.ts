@@ -9,12 +9,18 @@ export interface HookInput {
   session_id: string
   transcript_path?: string
   notification_type?: string
+  prompt?: string
+  tool_name?: string
+  tool_use_id?: string
+  file_path?: string
 }
 
 export const HOOK_EVENTS = [
   'UserPromptSubmit',
+  'PreToolUse',
   'PermissionRequest',
   'PostToolUse',
+  'PostToolUseFailure',
   'Notification',
   'Stop',
 ] as const
@@ -25,18 +31,36 @@ export interface HookMatcher {
   hooks: { type: 'http'; url: string; headers: { Authorization: string }; timeout: number }[]
 }
 
-/** Claude Code settings that send the five hook events to the listener. */
+/** Claude Code settings that send the seven hook events to the listener. */
 export function hookSettings(url: string, token: string): { hooks: Record<HookEvent, HookMatcher[]> } {
-  const hook = { type: 'http' as const, url, headers: { Authorization: `Bearer ${token}` }, timeout: 2 }
-  const matcher = (event: HookEvent): HookMatcher =>
-    event === 'PermissionRequest' || event === 'PostToolUse'
-      ? { matcher: '*', hooks: [hook] }
-      : { hooks: [hook] }
+  const hook = (timeout: number) => ({
+    type: 'http' as const,
+    url,
+    headers: { Authorization: `Bearer ${token}` },
+    timeout,
+  })
+  const matcher = (event: HookEvent): HookMatcher => {
+    switch (event) {
+      case 'UserPromptSubmit':
+        return { hooks: [hook(10)] }
+      case 'PreToolUse':
+        return { matcher: 'Bash', hooks: [hook(10)] }
+      case 'PostToolUseFailure':
+        return { matcher: 'Bash', hooks: [hook(2)] }
+      case 'PermissionRequest':
+      case 'PostToolUse':
+        return { matcher: '*', hooks: [hook(2)] }
+      default:
+        return { hooks: [hook(2)] }
+    }
+  }
   return {
     hooks: {
       UserPromptSubmit: [matcher('UserPromptSubmit')],
+      PreToolUse: [matcher('PreToolUse')],
       PermissionRequest: [matcher('PermissionRequest')],
       PostToolUse: [matcher('PostToolUse')],
+      PostToolUseFailure: [matcher('PostToolUseFailure')],
       Notification: [matcher('Notification')],
       Stop: [matcher('Stop')],
     },
