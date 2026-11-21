@@ -28,6 +28,16 @@ Detail for [Run several Claude sessions](../../usecase/blueprint/run_several_cla
 - Renaming: double-click a Claude tab's title to edit it in place. Enter or leaving the field keeps the new name, Escape the old one; an empty name keeps the old one. The name is the dockview panel title, so the window title, notifications, the Changes pane and the close question all read it, and the layout file saves it.
 - Restored layouts accept `claude-<n>` tabs (terminal, kind `claude`). Each starts a fresh session.
 - Chromium allows about 16 WebGL contexts. When it drops one, that terminal falls back to xterm's DOM renderer, which `onContextLoss` already handles.
+- Launching the built `out/main/index.js` directly (as the hands-on check and the e2e harness do) makes Electron's app name "Electron", so its user data is `~/.config/Electron`, not `~/.config/blueprint`.
+
+### Checked in the real app
+
+Real Claude Code 2.1.330 on Haiku, in manual mode, with two sessions in a scratch Git folder.
+
+- Each session wrote its own file. The review tagged one file "Claude" and the other "Claude 2", and the title read "Needs you: Claude 2" while that session waited.
+- Both sessions edited `notes.md`. Both tabs showed the overlap mark, each naming the other session.
+- Renaming Claude to "api retries" reached the title, the Changes header and the rows, including a Change made before the rename.
+- Closing Claude 2 while it worked asked first. After confirming, its tab and its `claude` process were gone, and both overlap marks cleared.
 
 ## Learning the status
 

@@ -38,10 +38,10 @@ Covers: Basic Flow, Alternative Flow 1, Alternative Flow 3.
 
 Work items:
 
-- [ ] Start another Claude session in a new tab
-- [ ] Tag each Change with the session that made it
-- [ ] Warn when two sessions change the same file
-- [ ] Confirm before closing a working session
+- [x] Start another Claude session in a new tab ([#9](https://github.com/karsanda/blueprint/issues/9))
+- [x] Tag each Change with the session that made it ([#9](https://github.com/karsanda/blueprint/issues/9))
+- [x] Warn when two sessions change the same file ([#9](https://github.com/karsanda/blueprint/issues/9))
+- [x] Confirm before closing a working session ([#9](https://github.com/karsanda/blueprint/issues/9))
 
 Test cases:
 
@@ -56,7 +56,7 @@ Covers: Alternative Flow 2.
 
 Work items:
 
-- [ ] Rename a session's tab, and use the new name everywhere
+- [x] Rename a session's tab, and use the new name everywhere ([#9](https://github.com/karsanda/blueprint/issues/9))
 
 Test cases:
 
