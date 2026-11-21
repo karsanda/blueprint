@@ -30,6 +30,8 @@ interface Followed {
   offset: number
   /** Bytes after the last newline, kept for the next read. */
   partial: Buffer
+  /** One catch-up read for growth that lands before watchFile takes its baseline. */
+  catchUp?: NodeJS.Timeout
 }
 
 function sizeOf(file: string): number {
@@ -54,11 +56,13 @@ export class TranscriptFollower {
     const state: Followed = { file, offset: sizeOf(file), partial: Buffer.alloc(0) }
     this.followed.set(sessionId, state)
     watchFile(file, { interval: this.intervalMs }, (curr: Stats) => this.read(sessionId, state, curr.size))
+    state.catchUp = setTimeout(() => this.read(sessionId, state, sizeOf(file)), this.intervalMs)
   }
 
   unfollow(sessionId: string): void {
     const state = this.followed.get(sessionId)
     if (!state) return
+    clearTimeout(state.catchUp)
     unwatchFile(state.file)
     this.followed.delete(sessionId)
   }
