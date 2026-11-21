@@ -1,5 +1,5 @@
 import { type ElectronApplication, expect, type Locator, type Page, test } from '@playwright/test'
-import { gitFolder, launch, probeText, readLog, typeInto } from './launch'
+import { dropTab, gitFolder, launch, probeText, readLog, typeInto } from './launch'
 
 function groupWith(page: Page, title: string): Locator {
   return page.locator('.dv-groupview', { has: page.locator('.dv-tab', { hasText: title }) })
@@ -375,15 +375,68 @@ function promptsOf(log: string, hooks: string): number {
 
 test("clicking a session's tab puts the keyboard in its terminal", async () => {
   const { app, page, log } = await twoSessions()
-  await focusClaude(page, 'Claude')
-  await expectKeyboardIn(page, 'claude-1')
+  await clickTab(page, 'Claude')
   await page.keyboard.type('p')
   await expect.poll(() => promptsOf(log, 'claude.hooks')).toBe(1)
-  await focusClaude(page, 'Claude 2')
-  await expectKeyboardIn(page, 'claude-2')
+  await clickTab(page, 'Claude 2')
   await page.keyboard.type('p')
   await expect.poll(() => promptsOf(log, 'claude2.hooks')).toBe(1)
   await expect.poll(() => promptsOf(log, 'claude.hooks')).toBe(1)
+  await app.close()
+})
+
+/** Clicks a session's tab as a Developer does, holding the button briefly, and returns at once to type. */
+async function clickTab(page: Page, title: string): Promise<void> {
+  await page.locator('.dv-tab', { hasText: new RegExp(`^\\s*⚠?\\s*${title}\\s*$`) }).click({ delay: 80 })
+}
+
+test("clicking a session's tab in another pane puts the keyboard in its terminal", async () => {
+  const { app, page, log } = await twoSessions()
+  const content = await groupWith(page, 'Claude').locator('.dv-content-container').boundingBox()
+  if (!content) throw new Error('No Claude pane')
+  await dropTab(page, 'Claude 2', content.x + content.width * 0.95, content.y + content.height / 2)
+  await expect(page.locator('.dv-groupview')).toHaveCount(5)
+  await clickTab(page, 'Claude')
+  await page.keyboard.type('p')
+  await expect.poll(() => promptsOf(log, 'claude.hooks')).toBe(1)
+  await clickTab(page, 'Claude 2')
+  await page.keyboard.type('p')
+  await expect.poll(() => promptsOf(log, 'claude2.hooks')).toBe(1)
+  await clickTab(page, 'Claude')
+  await page.keyboard.type('p')
+  await expect.poll(() => promptsOf(log, 'claude.hooks')).toBe(2)
+  await tab(page, 'Shell').click()
+  await clickTab(page, 'Claude')
+  await page.keyboard.type('p')
+  await expect.poll(() => promptsOf(log, 'claude.hooks')).toBe(3)
+  await app.close()
+})
+
+test("a fast double-click on an inactive session's tab opens its name field and keeps it", async () => {
+  const { app, page } = await twoSessions()
+  await page
+    .locator('.dv-tab', { hasText: /^\s*⚠?\s*Claude\s*$/ })
+    .locator('.dv-default-tab-content')
+    .dblclick()
+  await page.keyboard.press('Control+A')
+  await page.keyboard.type('fast')
+  await page.keyboard.press('Enter')
+  await expect(tab(page, 'fast')).toBeVisible()
+  await app.close()
+})
+
+test('Escape and Enter during IME composition leave the name field open', async () => {
+  const { app, page } = await launch()
+  await expect.poll(() => probeText(page, 'claude-1')).toContain('claude ready')
+  await tab(page, 'Claude').locator('.dv-default-tab-content').dblclick()
+  const field = page.getByRole('textbox', { name: 'Session name' })
+  await expect(field).toBeFocused()
+  for (const key of ['Escape', 'Enter']) {
+    await field.evaluate((el, k) => {
+      el.dispatchEvent(new KeyboardEvent('keydown', { key: k, isComposing: true, bubbles: true }))
+    }, key)
+    await expect(field).toBeFocused()
+  }
   await app.close()
 })
 

@@ -33,12 +33,15 @@ export function TerminalPanel({ api, params }: IDockviewPanelProps<TerminalParam
       // the terminal has it.
       let frames = 0
       const take = () => {
+        // A rename field the Developer opened by double-clicking keeps the keyboard.
+        if (document.activeElement?.classList.contains('bp-tab-name')) return
         term?.focus()
         if (api.isActive && term?.textarea && document.activeElement !== term.textarea && ++frames < 30) {
           requestAnimationFrame(take)
         }
       }
-      take()
+      // The first try waits a frame, so it runs after the click's own focus change onto the tab.
+      requestAnimationFrame(take)
     }
     const subs = [
       api.onDidActiveChange((e) => {
