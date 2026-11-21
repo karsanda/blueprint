@@ -60,12 +60,14 @@ void app.whenReady().then(async () => {
     if (win && !win.webContents.isDestroyed()) win.webContents.send(channel, ...args)
   }
   const relay = new StatusRelay((tabId, signal) => send('status:signal', tabId, signal))
-  const reviewDir = createReviewDir(app.getPath('userData'))
-  const review = new ReviewService(reviewDir.dir, (state) => send('review:update', state))
-  await review.setFolder(folder.folder)
-  let listener: HookListener
-  let hookDir: ReturnType<typeof createHookDir>
+  let reviewDir: ReturnType<typeof createReviewDir> | undefined
+  let review: ReviewService
+  let listener: HookListener | undefined
+  let hookDir: ReturnType<typeof createHookDir> | undefined
   try {
+    reviewDir = createReviewDir(app.getPath('userData'))
+    review = new ReviewService(reviewDir.dir, (state) => send('review:update', state))
+    await review.setFolder(folder.folder)
     listener = await startHookListener((startKey, e) => {
       // The status goes out first: the review may hold the reply while it takes a snapshot.
       relay.hook(startKey, e)
@@ -75,6 +77,10 @@ void app.whenReady().then(async () => {
   } catch (err) {
     // A window without status would show Idle while Claude waits, which is worse than no window.
     dialog.showErrorBox('Blueprint could not start', err instanceof Error ? err.message : String(err))
+    // The cleanup below is not registered yet, so remove what was already made.
+    void listener?.close()
+    hookDir?.remove()
+    reviewDir?.remove()
     app.quit()
     return
   }

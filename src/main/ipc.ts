@@ -71,7 +71,12 @@ async function startTerminal(deps: IpcDeps, req: StartRequest): Promise<StartRes
   if ('reason' in spec) return { ok: false, failure: spec }
   if (req.kind === 'claude') {
     deps.relay.register(req.tabId, startKey)
-    await deps.review.startSession(req.tabId, startKey)
+    try {
+      await deps.review.startSession(req.tabId, startKey)
+    } catch (err) {
+      // Claude is worth more than its review: start it without one.
+      console.warn('Review could not start a session:', err)
+    }
   }
   try {
     return { ok: true, pid: deps.manager.start(req.tabId, spec, req.cols, req.rows) }

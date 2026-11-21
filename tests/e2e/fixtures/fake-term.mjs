@@ -1,7 +1,7 @@
 // A stand-in for `claude` and the Developer's shell in e2e tests. It records what it receives
 // in $BLUEPRINT_TEST_LOG/<name>.<file>, so tests can check what reached the program.
 import { randomUUID } from 'node:crypto'
-import { appendFileSync, readFileSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
 
 const name = basename(process.argv[1])
@@ -38,31 +38,14 @@ const interrupt =
   '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"[Request interrupted by user for tool use]"}]},"isSidechain":false,"userType":"external"}'
 // Posts run one at a time, in order.
 let posting = Promise.resolve()
-function post(event, extra = {}) {
-  if (!hook) return
-  const target = hook(event)
-  posting = posting.then(async () => {
-    const res = await fetch(target.url, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', ...target.headers },
-      body: JSON.stringify({
-        session_id: sessionId,
-        transcript_path: transcript,
-        cwd: process.cwd(),
-        hook_event_name: event,
-        ...extra,
-      }),
-    })
-    out('hooks', `${event} ${res.status}\n`)
-  })
-}
 // Queues work behind earlier posts, so it runs once the post before it has had its reply.
+// A failed step is logged to stderr, so it never wedges the queue or reaches the terminal output.
 const later = (fn) => {
-  posting = posting.then(fn)
+  posting = posting.then(fn).catch((err) => process.stderr.write(`fake ${name}: ${err}\n`))
 }
 let writes = 0
 let shellCalls = 0
-const postNow = (event, extra) => {
+const postNow = (event, extra = {}) => {
   const target = hook(event)
   return fetch(target.url, {
     method: 'POST',
@@ -75,6 +58,9 @@ const postNow = (event, extra) => {
       ...extra,
     }),
   }).then((res) => out('hooks', `${event} ${res.status}\n`))
+}
+function post(event, extra) {
+  if (hook) later(() => postNow(event, extra))
 }
 const hookKeys = {
   p: () => post('UserPromptSubmit', { prompt: 'p' }),
@@ -96,10 +82,13 @@ const hookKeys = {
     }),
   // Claude edits notes.txt with its Edit tool.
   e: () =>
-    later(() => {
+    later(async () => {
       const file = resolve('notes.txt')
+      // Typed text may hold an `e` in a Folder without notes.txt: that is no edit.
+      if (!existsSync(file)) return undefined
       writeFileSync(file, readFileSync(file, 'utf8').replace('notes: first line', 'notes: changed by Claude'))
-      return postNow('PostToolUse', { tool_name: 'Edit', tool_input: { file_path: file } })
+      await postNow('PostToolUse', { tool_name: 'Edit', tool_input: { file_path: file } })
+      return undefined
     }),
   // Claude runs a shell command that makes a file: Blueprint hears it before and after.
   b: () =>
@@ -126,10 +115,12 @@ const hookKeys = {
 
 process.stdin.on('data', (buf) => {
   out('input', buf)
-  const key = buf.length === 1 ? String.fromCharCode(buf[0]) : ''
-  if (key === '~') process.exit(3)
   // Keys typed together may arrive as one chunk: each one still counts.
-  if (name === 'claude') for (const k of buf.toString('latin1')) hookKeys[k]?.()
+  for (const k of buf.toString('latin1')) {
+    if (k === '~') process.exit(3)
+    if (name === 'claude') hookKeys[k]?.()
+  }
+  const key = buf.length === 1 ? String.fromCharCode(buf[0]) : ''
   if (key === 'f' && name === 'fake-shell') {
     process.stdout.write(`\x1b[?1049h\x1b[2J\x1b[${process.stdout.rows};1HBOTTOM`)
     out('size', size() + '\n')
