@@ -29,6 +29,17 @@ function noClaudePath(): string {
   return dirs.join(delimiter)
 }
 
+/**
+ * Tests stay off the Developer's desktop. Chromium's headless display draws every window without
+ * showing it (BLUEPRINT_E2E_HEADED=1 shows them, for debugging), and a session bus that doesn't
+ * exist keeps desktop notifications from reaching the notification daemon.
+ */
+const headless =
+  process.env['BLUEPRINT_E2E_HEADED'] === '1'
+    ? []
+    : ['--ozone-platform=headless', '--ozone-override-screen-size=1920,1080']
+const noSessionBus = 'unix:path=/nonexistent/blueprint-e2e-bus'
+
 function definedEnv(env: NodeJS.ProcessEnv): Record<string, string> {
   return Object.fromEntries(Object.entries(env).filter((e): e is [string, string] => e[1] !== undefined))
 }
@@ -46,11 +57,13 @@ export async function launch(opts: LaunchOptions = {}): Promise<Launched> {
     SHELL: join(fixtureBin, 'fake-shell'),
     BLUEPRINT_E2E: '1',
     BLUEPRINT_TEST_LOG: log,
+    DBUS_SESSION_BUS_ADDRESS: noSessionBus,
   }
   const app = await electron.launch({
     args: [
       join(root, 'out/main/index.js'),
       '--no-sandbox',
+      ...headless,
       ...(opts.args ?? []),
       ...(folder ? [folder] : []),
     ],
