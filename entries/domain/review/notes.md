@@ -18,7 +18,7 @@ git add -A -- .
 git write-tree
 ```
 
-- `<store>` is one folder per Folder in Electron's user data folder. Blueprint empties it on start. The index and the objects go together: an index whose objects are gone breaks `write-tree`.
+- `<store>` is one folder per Folder, inside a folder that belongs to one run of Blueprint: `<user data>/review-<pid>-<random>`. Blueprint removes it on quit, and on start removes any left by a run whose process is gone. So two Blueprints on one Folder never share a store, and an index never outlives its objects: an index whose objects are gone breaks `write-tree`.
 - The repository's objects dir is `git rev-parse --path-format=absolute --git-path objects`, which also works in a linked worktree.
 - `-- .` keeps the snapshot to the Folder when the Folder is a subfolder of a repository.
 - `.gitignore` is respected, and untracked files are included.
