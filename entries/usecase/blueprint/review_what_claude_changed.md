@@ -76,8 +76,9 @@ Test cases:
 ## Known gaps
 
 - Claude Code can leave a command running in the background. Files it changes later show as changed outside Claude.
-- A file the Developer edits while Claude Code runs a command counts as Claude's.
+- A file the Developer edits while Claude Code runs a command, or waits to run one, counts as Claude's.
 - A file that both Claude Code and the Developer changed shows as Claude's.
+- Files that Claude Code changes through tools from other programs show as changed outside Claude.
 
 ## Terms
 

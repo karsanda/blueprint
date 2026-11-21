@@ -23,10 +23,16 @@ git write-tree
 - `-- .` keeps the snapshot to the Folder when the Folder is a subfolder of a repository.
 - `.gitignore` is respected, and untracked files are included.
 - Every git command that reads a snapshot (`write-tree`, `diff`) runs with the same environment.
+- Every git command, `rev-parse` included, also gets config through `GIT_CONFIG_COUNT`: `core.fsmonitor=false`, `core.splitIndex=false`, `core.hooksPath=/dev/null` and `gc.auto=0`. Checked on git 2.56.1: without it, the repository's config made a snapshot start an fsmonitor daemon that kept running, write `fsmonitor--daemon*` and `sharedindex.*` into `.git`, and run a `post-index-change` hook.
+- `GIT_ATTR_SOURCE` is the empty tree, `4b825dc642cb6eb9a060e54bf8d69288fbee4904`, so no `.gitattributes` filter, driver or eol rule runs. Without it, a clean filter, such as git-lfs's, ran on every snapshot.
+- `GIT_LITERAL_PATHSPECS=1` makes a path like `app/[id]/page.tsx` name that file only, not a glob.
+- Each git command is killed after 8 seconds, under the 10-second timeout of the hooks that wait for a snapshot. A snapshot that fails frees the next one.
 - Snapshots of one Folder run one at a time. Two `git add` runs on one index file collide on its lock.
 - Without Git, or outside a repository, Blueprint takes no snapshots and holds no replies. A repository with no commits works: `git init` already made its objects dir.
 - Checked: after a change, a snapshot added 6 objects to the store and none to the repository, and `git status` was unchanged.
-- Measured: 3 ms on Blueprint's own Folder. On 50,000 files, about 250 ms for the first snapshot and 25 ms after. Copying the repository's `.git/index` in as the starting index brings the first down to about 30 ms.
+- Measured: 3 ms on Blueprint's own Folder. On 50,000 files, about 250 ms for the first snapshot and 25 ms after. Copying the repository's `.git/index` in as the starting index brings the first down to about 30 ms. Blueprint does not: a split index or an fsmonitor extension makes that copy unsafe.
+- Opening a Folder waits only for `rev-parse`. The first snapshot runs in the background, so the window does not wait for it. Claude's start waits for the session base, at most the 8-second timeout.
+- When a snapshot or the list fails, for example on a timeout or a deleted Folder, the Changes pane says `Review could not read this Folder with Git. It tries again shortly.` The next refresh that succeeds replaces it.
 
 ### When Blueprint takes one
 
@@ -50,7 +56,8 @@ Node's recursive `fs.watch` adds an inotify watch for every directory, ignored o
 
 ## Computing Changes
 
-- The list is `git diff --name-status --no-renames <base> <now>`, with `--numstat` for the counts. A count of `-` means a binary file.
+- The list is `git diff --raw --no-abbrev --no-renames <base> <now>`, with `--numstat` for the counts. A count of `-` means a binary file.
+- Each Change carries a content id from `--raw`: the new blob, or the old one for a deleted file. A file that changes again with the same counts still sends a new list, so the difference follows it.
 - The difference for one file is `git diff --no-color --no-renames <base> <now> -- <path>`. A new or deleted file shows whole.
 - This turn compares with the turn base. Before the first prompt there is no turn base, and the Changes pane says so.
 - This session compares with the session base.
@@ -61,7 +68,7 @@ A Change is Claude's when Claude touched its path in the chosen range: this turn
 
 Claude touched a path when:
 
-- a `PostToolUse` for `Write`, `Edit` or `NotebookEdit` named it (`tool_input.file_path`, or `tool_input.notebook_path`). The path is absolute; Blueprint makes it relative to the Folder.
+- a `PostToolUse` for `Write`, `Edit` or `NotebookEdit` named it (`tool_input.file_path`, or `tool_input.notebook_path`). The path is absolute; Blueprint makes it relative to the Folder. Claude Code runs in the Folder's real path, so for a Folder opened through a symlink the path is under the real path. Blueprint matches it against the Folder as given and its real path, and by the file's own real path when the file exists.
 - it differs between the snapshots before and after one of Claude's `Bash` commands. The two hooks share a `tool_use_id`, and the after snapshot comes from `PostToolUse` or, when the command fails, `PostToolUseFailure`.
 
 A subagent's tool hooks reach the same start key, so its edits count as the session's.
@@ -73,8 +80,13 @@ Blueprint keeps the touched paths with the turn each was touched in. A path Clau
 Known gaps, also listed in the use case:
 
 - `Bash` with `run_in_background` fires `PostToolUse` when the command starts. Its later changes count as outside Claude.
-- A Developer edit made while a Claude `Bash` command runs counts as Claude's.
+- A Developer edit made while a Claude `Bash` command runs counts as Claude's. So does one made while its permission prompt waits: the prompt falls between `PreToolUse` and `PostToolUse`.
 - A file that both Claude and the Developer changed counts as Claude's.
+- MCP tools are not in the `PreToolUse` and `PostToolUse` handling. Files they change count as outside Claude.
+
+One more gap, too fine for the use case:
+
+- The snapshot after a `Bash` command runs in the background. When the next prompt arrives first, the command's touches can land in the next turn.
 
 ## Panes
 
