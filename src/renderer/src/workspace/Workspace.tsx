@@ -16,6 +16,7 @@ import { DifferencePanel } from '../review/DifferencePanel'
 import { StatusLight } from '../status/StatusLight'
 import { installNotifications } from '../status/notify'
 import { installTitle } from '../status/title'
+import { installConversationSaving } from '../terminal/conversation'
 import { findSession } from '../terminal/session'
 import { TerminalPanel } from '../terminal/TerminalPanel'
 import { addDefaultPanels } from './defaultLayout'
@@ -146,6 +147,8 @@ export function Workspace() {
         rightHeaderActionsComponent={GroupActions}
         defaultTabComponent={BlueprintTab}
         onReady={(e) => {
+          // First, so no conversation pushed while the layout loads goes unheard.
+          installConversationSaving(e.api)
           void (async () => {
             try {
               const saved = await window.blueprint.getLayout().catch(() => null)

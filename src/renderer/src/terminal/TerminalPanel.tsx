@@ -1,6 +1,6 @@
 import type { IDockviewPanelProps } from 'dockview-react'
 import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react'
-import type { TerminalKind } from '../../../shared/api'
+import type { SavedConversation, TerminalKind } from '../../../shared/api'
 import { STATUS_LABEL } from '../status/labels'
 import { useClaudeStatus } from '../status/store'
 import { findSession, getSession } from './session'
@@ -9,14 +9,17 @@ import { TerminalNotice } from './TerminalNotice'
 
 export interface TerminalParams {
   kind: TerminalKind
+  /** A Claude tab's conversation, for resuming it when the Folder reopens. */
+  conversation?: SavedConversation
 }
 
 export function TerminalPanel({ api, params }: IDockviewPanelProps<TerminalParams>) {
   const host = useRef<HTMLDivElement>(null)
   const status = useTerminalStatus((s) => s.tabs[api.id])
   const claude = useClaudeStatus((s) => s.tabs[api.id])
-  const cols = useCols(api.id, params.kind)
+  const cols = useCols(api.id, params.kind, params.conversation)
   useEffect(() => {
+    // The render above created the session with its conversation.
     const session = getSession(api.id, params.kind)
     if (host.current) session.attach(host.current)
     return () => session.detach()
@@ -70,6 +73,7 @@ export function TerminalPanel({ api, params }: IDockviewPanelProps<TerminalParam
           kind={params.kind}
           status={status}
           onRestart={() => void getSession(api.id, params.kind).restart()}
+          onDismiss={() => useTerminalStatus.getState().set(api.id, { state: 'running' })}
         />
       )}
     </div>
@@ -77,8 +81,9 @@ export function TerminalPanel({ api, params }: IDockviewPanelProps<TerminalParam
 }
 
 /** The terminal's width in columns, kept current as the pane resizes. */
-function useCols(tabId: string, kind: TerminalKind): number {
-  const session = getSession(tabId, kind)
+function useCols(tabId: string, kind: TerminalKind, conversation?: SavedConversation): number {
+  // The first render creates the session, so it is the one that must know the conversation.
+  const session = getSession(tabId, kind, conversation)
   const subscribe = useCallback(
     (onChange: () => void) => {
       const sub = session.term.onResize(onChange)

@@ -60,6 +60,10 @@ Test cases:
 
 Covers: Alternative Flow 3.
 
+Work items:
+
+- [x] Resume each Claude tab's conversation when the Folder reopens ([#12](https://github.com/karsanda/blueprint/issues/12))
+
 Test cases:
 
 - Given a Folder had a Claude session, when the Developer reopens Blueprint on it, then the same conversation continues.

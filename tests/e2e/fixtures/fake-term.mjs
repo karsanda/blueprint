@@ -51,10 +51,17 @@ process.stdout.write(`${program} ready\r\n`)
 process.stdout.on('resize', () => out('size', size() + '\n'))
 
 // As `claude`, it reads Blueprint's hook settings once and posts hook events on keys.
-const arg = (flag) => process.argv[process.argv.indexOf(flag) + 1]
-let sessionId = arg('--session-id')
-let transcript = join(log, `${name}.transcript.jsonl`)
-let clears = 0
+const arg = (flag) => {
+  const at = process.argv.indexOf(flag)
+  return at < 0 ? undefined : process.argv[at + 1]
+}
+// Claude Code names its transcript after the session id, which is `--session-id`, or else `--resume`.
+let sessionId = arg('--session-id') ?? arg('--resume')
+let transcript = join(log, `${sessionId}.jsonl`)
+if (isClaude) {
+  out('sessions', `${sessionId}\n`)
+  if (process.argv.includes('--resume')) process.stdout.write(`resumed ${sessionId}\r\n`)
+}
 const hook = (() => {
   if (!isClaude || !process.argv.includes('--settings')) return null
   const settings = JSON.parse(readFileSync(arg('--settings'), 'utf8'))
@@ -89,7 +96,11 @@ function post(event, extra) {
   if (hook) later(() => postNow(event, extra))
 }
 const hookKeys = {
-  p: () => post('UserPromptSubmit', { prompt: 'p' }),
+  p: () => {
+    // Claude Code writes the prompt to the transcript before the hook runs.
+    appendFileSync(transcript, '{"type":"user"}\n')
+    post('UserPromptSubmit', { prompt: 'p' })
+  },
   '?': () => post('PermissionRequest', { tool_name: 'Bash' }),
   n: () => post('Notification', { notification_type: 'permission_prompt' }),
   t: () => post('PostToolUse'),
@@ -133,7 +144,8 @@ const hookKeys = {
   c: () =>
     later(() => {
       sessionId = randomUUID()
-      transcript = join(log, `${name}.transcript-${++clears}.jsonl`)
+      transcript = join(log, `${sessionId}.jsonl`)
+      out('sessions', `${sessionId}\n`)
       out('hooks', 'clear\n')
     }),
   x: () => appendFileSync(transcript, interrupt + '\n'),
