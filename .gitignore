@@ -5,3 +5,5 @@ dist/
 .sandbox/
 .superpowers/
 entries/diagram/*.svg
+test-results/
+playwright-report/
