@@ -79,4 +79,10 @@ export interface BlueprintApi {
   notify(tabId: string, tabTitle: string): void
   /** Main asks to bring a session forward, after the Developer clicked its notification. */
   onFocusTab(cb: (tabId: string) => void): () => void
+  /** Every state the review reaches, as the Changes pane should show it. */
+  onReviewUpdate(cb: (state: ReviewState) => void): () => void
+  /** Tells main which range the Changes pane shows and whether the Developer can see it. */
+  setReviewView(view: ReviewView): void
+  /** The difference of one Change, by its path relative to the Folder. */
+  reviewDiff(path: string): Promise<FileDiff>
 }

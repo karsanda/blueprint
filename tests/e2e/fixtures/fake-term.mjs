@@ -1,8 +1,8 @@
 // A stand-in for `claude` and the Developer's shell in e2e tests. It records what it receives
 // in $BLUEPRINT_TEST_LOG/<name>.<file>, so tests can check what reached the program.
 import { randomUUID } from 'node:crypto'
-import { appendFileSync, readFileSync } from 'node:fs'
-import { basename, join } from 'node:path'
+import { appendFileSync, readFileSync, writeFileSync } from 'node:fs'
+import { basename, join, resolve } from 'node:path'
 
 const name = basename(process.argv[1])
 const log = process.env.BLUEPRINT_TEST_LOG
@@ -56,12 +56,63 @@ function post(event, extra = {}) {
     out('hooks', `${event} ${res.status}\n`)
   })
 }
+// Queues work behind earlier posts, so it runs once the post before it has had its reply.
+const later = (fn) => {
+  posting = posting.then(fn)
+}
+let writes = 0
+let shellCalls = 0
+const postNow = (event, extra) => {
+  const target = hook(event)
+  return fetch(target.url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...target.headers },
+    body: JSON.stringify({
+      session_id: sessionId,
+      transcript_path: transcript,
+      cwd: process.cwd(),
+      hook_event_name: event,
+      ...extra,
+    }),
+  }).then((res) => out('hooks', `${event} ${res.status}\n`))
+}
 const hookKeys = {
   p: () => post('UserPromptSubmit', { prompt: 'p' }),
   '?': () => post('PermissionRequest', { tool_name: 'Bash' }),
   n: () => post('Notification', { notification_type: 'permission_prompt' }),
   t: () => post('PostToolUse'),
   s: () => post('Stop'),
+  // Claude writes a file with its Write tool.
+  w: () =>
+    later(() => {
+      const n = ++writes
+      const file = resolve(`claude-${n}.txt`)
+      writeFileSync(file, `written by claude ${n}\n`)
+      return postNow('PostToolUse', {
+        tool_name: 'Write',
+        tool_use_id: `w${n}`,
+        tool_input: { file_path: file },
+      })
+    }),
+  // Claude edits notes.txt with its Edit tool.
+  e: () =>
+    later(() => {
+      const file = resolve('notes.txt')
+      writeFileSync(file, readFileSync(file, 'utf8').replace('notes: first line', 'notes: changed by Claude'))
+      return postNow('PostToolUse', { tool_name: 'Edit', tool_input: { file_path: file } })
+    }),
+  // Claude runs a shell command that makes a file: Blueprint hears it before and after.
+  b: () =>
+    later(async () => {
+      const id = `b${++shellCalls}`
+      const input = { command: 'make bash-made.txt' }
+      await postNow('PreToolUse', { tool_name: 'Bash', tool_use_id: id, tool_input: input })
+      writeFileSync(resolve('bash-made.txt'), 'made by a shell command\n')
+      await postNow('PostToolUse', { tool_name: 'Bash', tool_use_id: id, tool_input: input })
+    }),
+  // Claude Code's own message, as when a background command ends.
+  g: () =>
+    post('UserPromptSubmit', { prompt: '<task-notification>\n<task-id>b1</task-id>\n</task-notification>' }),
   // Stands in for /clear: Claude Code gives the conversation a new session id and a new transcript.
   c: () => {
     sessionId = randomUUID()
@@ -77,7 +128,8 @@ process.stdin.on('data', (buf) => {
   out('input', buf)
   const key = buf.length === 1 ? String.fromCharCode(buf[0]) : ''
   if (key === '~') process.exit(3)
-  if (name === 'claude') hookKeys[key]?.()
+  // Keys typed together may arrive as one chunk: each one still counts.
+  if (name === 'claude') for (const k of buf.toString('latin1')) hookKeys[k]?.()
   if (key === 'f' && name === 'fake-shell') {
     process.stdout.write(`\x1b[?1049h\x1b[2J\x1b[${process.stdout.rows};1HBOTTOM`)
     out('size', size() + '\n')

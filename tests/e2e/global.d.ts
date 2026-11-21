@@ -1,3 +1,4 @@
+import type { BlueprintApi, ReviewState } from '../../src/shared/api'
 import type { TerminalProbe } from '../../src/shared/probe'
 
 declare global {
@@ -9,8 +10,12 @@ declare global {
   var windowCalls: string[] | undefined
 
   interface Window {
+    /** The API the preload script exposes. */
+    blueprint: BlueprintApi
     blueprintProbe?: TerminalProbe
     /** The DataTransfer shared by one simulated tab drag in arrange.spec.ts. */
     dragData?: DataTransfer
+    /** Every review state main sent since a test called watchReview. */
+    reviewStates?: ReviewState[]
   }
 }

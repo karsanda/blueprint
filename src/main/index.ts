@@ -3,6 +3,8 @@ import { app, BrowserWindow, dialog, Menu, shell } from 'electron'
 import { resolveFolder } from './folder'
 import { type IpcDeps, registerIpc } from './ipc'
 import { NeedsYouNotifier } from './notify'
+import { createReviewDir } from './review/git'
+import { ReviewService } from './review/service'
 import { createHookDir, hookSettings, writeHookSettings } from './status/hooks'
 import { type HookListener, startHookListener } from './status/listener'
 import { StatusRelay } from './status/relay'
@@ -58,10 +60,17 @@ void app.whenReady().then(async () => {
     if (win && !win.webContents.isDestroyed()) win.webContents.send(channel, ...args)
   }
   const relay = new StatusRelay((tabId, signal) => send('status:signal', tabId, signal))
+  const reviewDir = createReviewDir(app.getPath('userData'))
+  const review = new ReviewService(reviewDir.dir, (state) => send('review:update', state))
+  await review.setFolder(folder.folder)
   let listener: HookListener
   let hookDir: ReturnType<typeof createHookDir>
   try {
-    listener = await startHookListener((startKey, e) => relay.hook(startKey, e))
+    listener = await startHookListener((startKey, e) => {
+      // The status goes out first: the review may hold the reply while it takes a snapshot.
+      relay.hook(startKey, e)
+      return review.hook(startKey, e)
+    })
     hookDir = createHookDir()
   } catch (err) {
     // A window without status would show Idle while Claude waits, which is worse than no window.
@@ -78,6 +87,7 @@ void app.whenReady().then(async () => {
     folder,
     manager,
     relay,
+    review,
     // The ipc module swaps in the Folder the Developer picks, so the notifier reads it through deps.
     notifier: new NeedsYouNotifier(
       win,
@@ -88,6 +98,7 @@ void app.whenReady().then(async () => {
       writeHookSettings(hookDir.dir, startKey, hookSettings(`${listener.url}/${startKey}`, listener.token)),
   }
   registerIpc(win, deps)
+  win.on('focus', () => void review.refresh())
   // Both events fire on quit, so the cleanup runs once.
   let cleaned = false
   const cleanUp = (): void => {
@@ -97,6 +108,8 @@ void app.whenReady().then(async () => {
     void listener.close()
     relay.close()
     hookDir.remove()
+    review.close()
+    reviewDir.remove()
   }
   // No terminal outlives the window: quitting ends every Claude session and shell.
   app.on('window-all-closed', () => {

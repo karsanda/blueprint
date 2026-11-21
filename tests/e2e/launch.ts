@@ -1,7 +1,9 @@
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, dirname, join, resolve } from 'node:path'
 import { _electron as electron, type ElectronApplication, type Page } from '@playwright/test'
+import type { ReviewState } from '../../src/shared/api'
 import type { TerminalProbe } from '../../src/shared/probe'
 
 export interface Launched {
@@ -52,6 +54,8 @@ export async function launch(opts: LaunchOptions = {}): Promise<Launched> {
   const env: Record<string, string> = {
     ...definedEnv(process.env),
     HOME: home,
+    // Electron keeps its user data under XDG_CONFIG_HOME, which the Developer's environment points at their own.
+    XDG_CONFIG_HOME: join(home, '.config'),
     PATH:
       opts.path === 'no-claude' ? noClaudePath() : `${fixtureBin}${delimiter}${process.env['PATH'] ?? ''}`,
     SHELL: join(fixtureBin, 'fake-shell'),
@@ -106,4 +110,35 @@ export async function probeCall(page: Page, method: 'focus' | 'selectAll', tabId
 export async function typeInto(page: Page, tabId: string, text: string): Promise<void> {
   await probeCall(page, 'focus', tabId)
   await page.keyboard.type(text)
+}
+
+/** A temp Folder in a Git repository, with `notes.txt` and `README.md` committed. */
+export function gitFolder(): string {
+  const dir = mkdtempSync(join(tmpdir(), 'blueprint-e2e-git-'))
+  writeFileSync(join(dir, 'notes.txt'), 'notes: first line\nnotes: second line\n')
+  writeFileSync(join(dir, 'README.md'), '# Test Folder\n\nA Folder for review tests.\n')
+  const git = (...args: string[]): void => {
+    execFileSync(
+      'git',
+      ['-c', 'user.name=t', '-c', 'user.email=t@example.invalid', '-c', 'commit.gpgsign=false', ...args],
+      { cwd: dir, stdio: 'ignore' },
+    )
+  }
+  git('init', '-q')
+  git('add', '-A')
+  git('commit', '-q', '-m', 'Start')
+  return dir
+}
+
+/** Collects every review update on `window.reviewStates` and shows the Changes pane for This turn. */
+export async function watchReview(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    window.reviewStates = []
+    window.blueprint.onReviewUpdate((state) => window.reviewStates?.push(state))
+    window.blueprint.setReviewView({ range: 'turn', visible: true })
+  })
+}
+
+export async function lastReview(page: Page): Promise<ReviewState | undefined> {
+  return page.evaluate(() => window.reviewStates?.at(-1))
 }

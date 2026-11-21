@@ -3,6 +3,7 @@ import type {
   BlueprintApi,
   ExitInfo,
   FolderState,
+  ReviewState,
   StartRequest,
   StartResult,
   StatusSignal,
@@ -45,6 +46,15 @@ const api: BlueprintApi = {
       ipcRenderer.off('status:focus', listener)
     }
   },
+  onReviewUpdate: (cb) => {
+    const listener = (_e: IpcRendererEvent, state: ReviewState): void => cb(state)
+    ipcRenderer.on('review:update', listener)
+    return () => {
+      ipcRenderer.off('review:update', listener)
+    }
+  },
+  setReviewView: (view) => ipcRenderer.send('review:view', view),
+  reviewDiff: (path) => ipcRenderer.invoke('review:diff', path),
 }
 
 contextBridge.exposeInMainWorld('blueprint', api)
