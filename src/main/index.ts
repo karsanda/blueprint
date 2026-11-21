@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import { app, BrowserWindow } from 'electron'
 import { resolveFolder } from './folder'
 import { registerIpc } from './ipc'
+import { TerminalManager } from './terminal/manager'
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -26,6 +27,19 @@ function createWindow(): BrowserWindow {
 
 void app.whenReady().then(() => {
   const folder = resolveFolder(process.argv, { packaged: app.isPackaged, cwd: process.cwd() })
-  registerIpc(createWindow(), { folder })
+  const win = createWindow()
+  const send = (channel: string, ...args: unknown[]): void => {
+    if (!win.webContents.isDestroyed()) win.webContents.send(channel, ...args)
+  }
+  const manager = new TerminalManager({
+    data: (tabId, data) => send('terminal:data', tabId, data),
+    exit: (tabId, exit) => send('terminal:exit', tabId, exit),
+  })
+  registerIpc(win, { folder, manager })
+  // No terminal outlives the window: quitting ends every Claude session and shell.
+  app.on('window-all-closed', () => {
+    manager.killAll()
+    app.quit()
+  })
+  app.on('before-quit', () => manager.killAll())
 })
-app.on('window-all-closed', () => app.quit())

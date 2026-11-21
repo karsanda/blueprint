@@ -1,8 +1,12 @@
-import { type BrowserWindow, dialog, ipcMain } from 'electron'
-import type { FolderState } from '../shared/api'
+import { randomUUID } from 'node:crypto'
+import { type BrowserWindow, clipboard, dialog, ipcMain } from 'electron'
+import type { FolderState, StartRequest, StartResult } from '../shared/api'
+import type { TerminalManager } from './terminal/manager'
+import { claudeSpec, shellSpec } from './terminal/spec'
 
 export interface IpcDeps {
   folder: FolderState
+  manager: TerminalManager
 }
 
 /** Registers the channels behind `window.blueprint`. Blueprint has one window, so this runs once. */
@@ -14,4 +18,30 @@ export function registerIpc(win: BrowserWindow, deps: IpcDeps): void {
     if (picked) deps.folder = { folder: picked }
     return deps.folder
   })
+
+  ipcMain.handle('terminal:start', (_e, req: StartRequest): StartResult => startTerminal(deps, req))
+  ipcMain.on('terminal:write', (_e, tabId: string, data: string) => deps.manager.write(tabId, data))
+  ipcMain.on('terminal:resize', (_e, tabId: string, cols: number, rows: number) =>
+    deps.manager.resize(tabId, cols, rows),
+  )
+
+  ipcMain.handle('clipboard:read', async (): Promise<string> => clipboard.readText())
+  ipcMain.on('clipboard:write', (_e, text: string) => clipboard.writeText(text))
+}
+
+function startTerminal(deps: IpcDeps, req: StartRequest): StartResult {
+  const folder = deps.folder.folder
+  if (!folder) return { ok: false, failure: { reason: 'spawn-failed', message: 'No Folder is open.' } }
+  // Each Claude start is a new conversation; resuming one comes with a later slice.
+  const spec =
+    req.kind === 'claude' ? claudeSpec(folder, process.env, randomUUID()) : shellSpec(folder, process.env)
+  if ('reason' in spec) return { ok: false, failure: spec }
+  try {
+    return { ok: true, pid: deps.manager.start(req.tabId, spec, req.cols, req.rows) }
+  } catch (err) {
+    return {
+      ok: false,
+      failure: { reason: 'spawn-failed', message: err instanceof Error ? err.message : String(err) },
+    }
+  }
 }

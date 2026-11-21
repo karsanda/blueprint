@@ -4,15 +4,37 @@ export interface FolderState {
   problem?: string
 }
 
-/** The API the preload script exposes to the renderer as `window.blueprint`. */
-export interface BlueprintApi {
-  getFolder(): Promise<FolderState>
-  pickFolder(): Promise<FolderState>
-}
-
 export type TerminalKind = 'claude' | 'shell'
 
 /** Why a terminal could not start, in words for the Developer. */
 export type StartFailure =
   | { reason: 'not-installed'; message: string; fix: string }
   | { reason: 'spawn-failed'; message: string }
+
+export interface StartRequest {
+  tabId: string
+  kind: TerminalKind
+  cols: number
+  rows: number
+}
+
+export type StartResult = { ok: true; pid: number } | { ok: false; failure: StartFailure }
+
+/** How a terminal's program ended. `signal` is present only when a signal ended it. */
+export interface ExitInfo {
+  exitCode: number
+  signal?: number
+}
+
+/** The API the preload script exposes to the renderer as `window.blueprint`. */
+export interface BlueprintApi {
+  getFolder(): Promise<FolderState>
+  pickFolder(): Promise<FolderState>
+  startTerminal(req: StartRequest): Promise<StartResult>
+  write(tabId: string, data: string): void
+  resize(tabId: string, cols: number, rows: number): void
+  onData(tabId: string, cb: (data: string) => void): () => void
+  onExit(tabId: string, cb: (exit: ExitInfo) => void): () => void
+  readClipboard(): Promise<string>
+  writeClipboard(text: string): void
+}
