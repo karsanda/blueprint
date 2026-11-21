@@ -20,6 +20,7 @@ export class TerminalSession {
   private opened = false
   private started = false
   private observer: ResizeObserver | null = null
+  private host: HTMLElement | null = null
   private frame = 0
 
   constructor(tabId: string, kind: TerminalKind) {
@@ -53,6 +54,7 @@ export class TerminalSession {
 
   /** Shows the terminal in `el`, and starts its program the first time. */
   attach(el: HTMLElement): void {
+    this.host = el
     if (!this.opened) {
       this.term.open(el)
       this.loadRenderers()
@@ -83,7 +85,7 @@ export class TerminalSession {
   private async start(): Promise<void> {
     const status = useTerminalStatus.getState()
     status.set(this.tabId, { state: 'starting' })
-    this.fit.fit()
+    this.fitToHost()
     const { cols, rows } = this.term
     const result = await window.blueprint.startTerminal({ tabId: this.tabId, kind: this.kind, cols, rows })
     if (!result.ok) {
@@ -111,7 +113,16 @@ export class TerminalSession {
 
   private scheduleFit(): void {
     cancelAnimationFrame(this.frame)
-    this.frame = requestAnimationFrame(() => this.fit.fit())
+    this.frame = requestAnimationFrame(() => this.fitToHost())
+  }
+
+  /**
+   * Fits the terminal to its pane. A pane with no size (hidden behind a zoomed pane) is skipped:
+   * fitting it would squeeze the program to 2 columns and make it redraw everything.
+   */
+  private fitToHost(): void {
+    if (!this.host || this.host.clientWidth === 0 || this.host.clientHeight === 0) return
+    this.fit.fit()
   }
 }
 

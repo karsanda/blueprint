@@ -130,15 +130,20 @@ test("dropping a tab on a pane's edge splits that pane", async () => {
 })
 
 test('zooming out returns the previous layout', async () => {
-  const { app, page } = await launch()
+  const { app, page, log } = await launch()
   await ready(page)
   const claude = groupWith(page, 'Claude')
   const shell = groupWith(page, 'Shell')
   const [claudeBefore, shellBefore] = [await box(claude), await box(shell)]
+  await page.waitForTimeout(300)
+  const shellSizes = readLog(log, 'fake-shell.size')
 
   await claude.getByRole('button', { name: 'Zoom pane' }).click()
   await expect(shell).toBeHidden()
   expect((await box(claude)).width).toBeGreaterThan(claudeBefore.width + shellBefore.width)
+  // The hidden pane's program keeps its size: it is never squeezed to nothing.
+  await page.waitForTimeout(300)
+  expect(readLog(log, 'fake-shell.size')).toBe(shellSizes)
 
   await claude.getByRole('button', { name: 'Zoom out' }).click()
   await expect(shell).toBeVisible()
@@ -149,5 +154,17 @@ test('zooming out returns the previous layout', async () => {
     expect(Math.abs(now.x - before.x)).toBeLessThanOrEqual(1)
     expect(Math.abs(now.width - before.width)).toBeLessThanOrEqual(1)
   }
+  await app.close()
+})
+
+test('tabs have no close action until a closed tab can be reopened', async () => {
+  const { app, page, log } = await launch()
+  await ready(page)
+  await expect(page.locator('.dv-default-tab-action')).toHaveCount(0)
+  await page.locator('.dv-tab', { hasText: 'Shell' }).click({ button: 'middle' })
+  await page.waitForTimeout(300)
+  await expect(page.locator('.dv-tab')).toHaveCount(2)
+  const pid = JSON.parse(readLog(log, 'fake-shell.start').trim().split('\n')[0] ?? '{}').pid
+  expect(() => process.kill(pid, 0)).not.toThrow()
   await app.close()
 })

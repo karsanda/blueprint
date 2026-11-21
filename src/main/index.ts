@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { app, BrowserWindow, Menu } from 'electron'
+import { app, BrowserWindow, Menu, shell } from 'electron'
 import { resolveFolder } from './folder'
 import { registerIpc } from './ipc'
 import { TerminalManager } from './terminal/manager'
@@ -21,6 +21,13 @@ function createWindow(): BrowserWindow {
   // Blueprint asks for no browser permissions. Denying them also keeps the ligatures add-on on its built-in list.
   win.webContents.session.setPermissionRequestHandler((_wc, _permission, done) => done(false))
   win.once('ready-to-show', () => win.show())
+  // The window only ever shows Blueprint: a page it navigated to would get the terminal API.
+  // Links (such as OSC 8 links in terminal output) open in the Developer's browser instead.
+  win.webContents.on('will-navigate', (event) => event.preventDefault())
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (isWebUrl(url)) void shell.openExternal(url)
+    return { action: 'deny' }
+  })
   if (!app.isPackaged) {
     win.webContents.on('before-input-event', (event, input) => {
       if (input.type === 'keyDown' && input.key === 'F12') {
@@ -56,3 +63,12 @@ void app.whenReady().then(() => {
   })
   app.on('before-quit', () => manager.killAll())
 })
+
+function isWebUrl(url: string): boolean {
+  try {
+    const { protocol } = new URL(url)
+    return protocol === 'https:' || protocol === 'http:'
+  } catch {
+    return false
+  }
+}
