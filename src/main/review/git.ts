@@ -1,0 +1,154 @@
+import { execFile } from 'node:child_process'
+import { chmodSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
+import type { Change } from '../../shared/api'
+
+export type GitChange = Omit<Change, 'byClaude'>
+export type GitProblem = 'no-git' | 'not-a-repo'
+
+const KINDS: Record<string, GitChange['kind']> = { A: 'added', D: 'deleted', M: 'modified', T: 'modified' }
+
+/** Reads the `-z` outputs of `git diff --name-status` and `git diff --numstat`, in name-status order. */
+export function parseChanges(nameStatus: string, numstat: string): GitChange[] {
+  const counts = new Map<string, { added: number; removed: number; binary: boolean }>()
+  for (const record of numstat.split('\0')) {
+    const [added, removed, ...rest] = record.split('\t')
+    const path = rest.join('\t')
+    if (!path) continue
+    const binary = added === '-' && removed === '-'
+    counts.set(path, { added: binary ? 0 : Number(added), removed: binary ? 0 : Number(removed), binary })
+  }
+  const tokens = nameStatus.split('\0')
+  const changes: GitChange[] = []
+  for (let i = 0; i + 1 < tokens.length; i += 2) {
+    const kind = KINDS[tokens[i]]
+    const path = tokens[i + 1]
+    if (!kind || !path) continue
+    changes.push({ path, kind, ...(counts.get(path) ?? { added: 0, removed: 0, binary: false }) })
+  }
+  return changes
+}
+
+function errorCode(error: unknown): unknown {
+  return error instanceof Error && 'code' in error ? error.code : undefined
+}
+
+function run(
+  git: string,
+  args: string[],
+  cwd: string,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile(git, args, { cwd, env, encoding: 'utf8', maxBuffer: 1 << 30 }, (error, stdout) =>
+      error ? reject(error) : resolve(stdout),
+    )
+  })
+}
+
+/**
+ * Records the Folder as git trees in Blueprint's own index and object store, so the Developer's repository
+ * is never written. The repository's objects are only read, through GIT_ALTERNATE_OBJECT_DIRECTORIES.
+ */
+export class SnapshotStore {
+  private chain: Promise<unknown> = Promise.resolve()
+  private running = 0
+
+  private constructor(
+    private readonly folder: string,
+    private readonly git: string,
+    private readonly env: NodeJS.ProcessEnv,
+  ) {}
+
+  static async open(
+    folder: string,
+    storeDir: string,
+    git = 'git',
+  ): Promise<SnapshotStore | { problem: GitProblem }> {
+    let objects: string
+    try {
+      objects = (
+        await run(git, ['rev-parse', '--path-format=absolute', '--git-path', 'objects'], folder)
+      ).trim()
+    } catch (error) {
+      return { problem: errorCode(error) === 'ENOENT' ? 'no-git' : 'not-a-repo' }
+    }
+    rmSync(storeDir, { recursive: true, force: true })
+    mkdirSync(join(storeDir, 'objects'), { recursive: true })
+    const env = {
+      ...process.env,
+      GIT_INDEX_FILE: join(storeDir, 'index'),
+      GIT_OBJECT_DIRECTORY: join(storeDir, 'objects'),
+      GIT_ALTERNATE_OBJECT_DIRECTORIES: objects,
+    }
+    return new SnapshotStore(folder, git, env)
+  }
+
+  get busy(): boolean {
+    return this.running > 0
+  }
+
+  /** Records the Folder as it is now and returns the tree id. Snapshots run one at a time, in call order. */
+  snapshot(): Promise<string> {
+    this.running++
+    const result = this.chain.then(async () => {
+      await this.exec(['add', '-A', '--', '.'])
+      return (await this.exec(['write-tree'])).trim()
+    })
+    this.chain = result.then(
+      () => undefined,
+      () => undefined,
+    )
+    return result.finally(() => {
+      this.running--
+    })
+  }
+
+  async changes(base: string, now: string): Promise<GitChange[]> {
+    const [nameStatus, numstat] = await Promise.all([
+      this.exec(['diff', '--no-renames', '--relative', '-z', '--name-status', base, now]),
+      this.exec(['diff', '--no-renames', '--relative', '-z', '--numstat', base, now]),
+    ])
+    return parseChanges(nameStatus, numstat)
+  }
+
+  diff(base: string, now: string, path: string): Promise<string> {
+    return this.exec([
+      'diff',
+      '--no-color',
+      '--no-ext-diff',
+      '--no-textconv',
+      '--no-renames',
+      '--relative',
+      base,
+      now,
+      '--',
+      path,
+    ])
+  }
+
+  private exec(args: string[]): Promise<string> {
+    return run(this.git, args, this.folder, this.env)
+  }
+}
+
+function isGone(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return false
+  } catch (error) {
+    return errorCode(error) === 'ESRCH'
+  }
+}
+
+/** Makes this run's private dir `<base>/review-<pid>-XXXXXX`, after clearing the dirs of runs that are gone. */
+export function createReviewDir(base: string): { dir: string; remove(): void } {
+  mkdirSync(base, { recursive: true })
+  for (const name of readdirSync(base)) {
+    const match = /^review-(\d+)-/.exec(name)
+    if (match && isGone(Number(match[1]))) rmSync(join(base, name), { recursive: true, force: true })
+  }
+  const dir = mkdtempSync(join(base, `review-${process.pid}-`))
+  chmodSync(dir, 0o700)
+  return { dir, remove: () => rmSync(dir, { recursive: true, force: true }) }
+}

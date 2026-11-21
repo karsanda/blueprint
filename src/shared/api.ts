@@ -37,6 +37,30 @@ export type StatusSignal =
   | { kind: 'interrupted' } // the transcript gained an interrupt line
   | { kind: 'typed' } // the Developer typed a key in the pane (renderer only)
 
+export type ReviewRange = 'turn' | 'session'
+/** The Changes pane's range, and whether the Developer can see the pane. */
+export interface ReviewView {
+  range: ReviewRange
+  visible: boolean
+}
+/** A Change as the review lists it. The path is relative to the Folder, with `/`. Counts are 0 for a binary file. */
+export interface Change {
+  path: string
+  kind: 'added' | 'modified' | 'deleted'
+  added: number
+  removed: number
+  binary: boolean
+  byClaude: boolean
+}
+export type ReviewState =
+  | { kind: 'no-git'; message: string }
+  | { kind: 'waiting'; message: string }
+  | { kind: 'changes'; range: ReviewRange; changes: Change[] }
+export type FileDiff =
+  | { kind: 'text'; patch: string; byClaude: boolean }
+  | { kind: 'binary' }
+  | { kind: 'none' }
+
 /** The API the preload script exposes to the renderer as `window.blueprint`. */
 export interface BlueprintApi {
   /** True when e2e tests run the app (BLUEPRINT_E2E=1). */
