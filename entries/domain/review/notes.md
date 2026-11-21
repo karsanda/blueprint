@@ -14,7 +14,7 @@ A snapshot is the whole Folder as a git tree. Blueprint makes it with its own in
 export GIT_INDEX_FILE=<store>/index
 export GIT_OBJECT_DIRECTORY=<store>/objects
 export GIT_ALTERNATE_OBJECT_DIRECTORIES=<the repository's objects dir>
-git add -A -- .
+git add -A -- . ':(exclude,attr:filter=lfs)'
 git write-tree
 ```
 
@@ -23,16 +23,28 @@ git write-tree
 - `-- .` keeps the snapshot to the Folder when the Folder is a subfolder of a repository.
 - `.gitignore` is respected, and untracked files are included.
 - Every git command that reads a snapshot (`write-tree`, `diff`) runs with the same environment.
-- Every git command, `rev-parse` included, also gets config through `GIT_CONFIG_COUNT`: `core.fsmonitor=false`, `core.splitIndex=false`, `core.hooksPath=/dev/null` and `gc.auto=0`. Checked on git 2.56.1: without it, the repository's config made a snapshot start an fsmonitor daemon that kept running, write `fsmonitor--daemon*` and `sharedindex.*` into `.git`, and run a `post-index-change` hook.
-- `GIT_ATTR_SOURCE` is the empty tree, `4b825dc642cb6eb9a060e54bf8d69288fbee4904`, so no `.gitattributes` filter, driver or eol rule runs. Without it, a clean filter, such as git-lfs's, ran on every snapshot.
-- `GIT_LITERAL_PATHSPECS=1` makes a path like `app/[id]/page.tsx` name that file only, not a glob.
-- Each git command is killed after 8 seconds, under the 10-second timeout of the hooks that wait for a snapshot. A snapshot that fails frees the next one.
+- Every git command, `rev-parse` included, also gets config through `GIT_CONFIG_COUNT`: `core.fsmonitor=false`, `core.splitIndex=false`, `core.hooksPath=/dev/null`, `gc.auto=0` and `core.safecrlf=false`. Checked on git 2.56.1: without the first four, the repository's config made a snapshot start an fsmonitor daemon that kept running, write `fsmonitor--daemon*` and `sharedindex.*` into `.git`, and run a `post-index-change` hook. Without the last, `core.autocrlf=input` with `core.safecrlf=true` made every snapshot fail on a file with mixed line endings. `core.safecrlf` only checks; it never writes.
+- The repository's attributes apply, from `.gitattributes`, `.git/info/attributes` or a global attributes file. Eol rules and clean filters run as in the Developer's own `git add`.
+- Files stored with Git LFS are left out by the `:(exclude,attr:filter=lfs)` pathspec. Git LFS's filter writes each file it cleans into `.git/lfs/objects`, and a raw LFS file goes into the store whole, on every launch. Their Changes are not listed, a known gap. Checked on git 2.56.1: with the empty tree as `GIT_ATTR_SOURCE`, a 2 MB LFS file put 2 MB into the store. An empty `filter.lfs.process` does too: git then runs no `filter.lfs.clean` either, since a process filter takes precedence.
+- The one-file diff runs as `git --literal-pathspecs diff`, so a path like `app/[id]/page.tsx` names that file only, not a glob. The add cannot read pathspecs literally: its exclude needs pathspec magic.
 - Snapshots of one Folder run one at a time. Two `git add` runs on one index file collide on its lock.
 - Without Git, or outside a repository, Blueprint takes no snapshots and holds no replies. A repository with no commits works: `git init` already made its objects dir.
 - Checked: after a change, a snapshot added 6 objects to the store and none to the repository, and `git status` was unchanged.
 - Measured: 3 ms on Blueprint's own Folder. On 50,000 files, about 250 ms for the first snapshot and 25 ms after. Copying the repository's `.git/index` in as the starting index brings the first down to about 30 ms. Blueprint does not: a split index or an fsmonitor extension makes that copy unsafe.
-- Opening a Folder waits only for `rev-parse`. The first snapshot runs in the background, so the window does not wait for it. Claude's start waits for the session base, at most the 8-second timeout.
-- When a snapshot or the list fails, for example on a timeout or a deleted Folder, the Changes pane says `Review could not read this Folder with Git. It tries again shortly.` The next refresh that succeeds replaces it.
+- Opening a Folder waits only for `rev-parse`. The first snapshot runs in the background, so the window does not wait for it.
+
+### Slow and failing Git
+
+- Claude's start waits for the session base, and the reply to `UserPromptSubmit` and `PreToolUse` waits for its snapshot. Each wait races one 8-second timer that covers the queue too. A wait never exceeds 8 seconds, under the 10-second timeout of those hooks.
+- Git goes on after the wait ends. A git command is stopped only after 5 minutes, which frees the snapshots queued behind a hung git. Stopping it sooner saves no work: the next `git add` would start cold again. A snapshot that fails frees the next one.
+- `rev-parse` is stopped after 8 seconds: it reads no working files, and the window waits for it. One that gives no answer says nothing about the Folder. The Changes pane says Git could not read it, and each refresh tries to open the store again until it opens.
+- A snapshot that lands after its wait ended still counts:
+  - The session is registered when Claude starts, with its base pending, so its hooks count while the base is read.
+  - A late turn base still becomes the turn base for its prompt, unless a newer Developer prompt arrived since. The turn itself starts when the prompt arrives, so what Claude touches while the base is read belongs to it.
+  - A late snapshot before a command still pairs with the snapshot after it.
+  - A late base may include Claude's first edits. Those then do not show.
+- While the shown range's base is read, the Changes pane says `Review is reading this Folder with Git.`
+- When a snapshot or the list fails, for example on a git stopped at 5 minutes or a deleted Folder, the Changes pane says `Review could not read this Folder with Git. It tries again shortly.` The next refresh that succeeds replaces it. A base whose snapshot failed shows that message too. The next snapshot that succeeds, from a refresh or a hook, becomes that base.
 
 ### When Blueprint takes one
 
@@ -45,9 +57,9 @@ git write-tree
 | Any other `PostToolUse`, `Stop`, the window coming to the front, and every 2 seconds while the Changes pane is visible | now | refresh |
 
 - The status signal goes out when the hook arrives. Only the reply waits for the snapshot.
-- Claude Code waits for the reply to `UserPromptSubmit` and `PreToolUse` hooks, up to the hook's timeout. Holding the reply until the snapshot is written puts the base before Claude's first edit. These two hooks get a 10-second timeout. Past it, Claude Code goes on silently, and a late snapshot may include a first edit.
+- Claude Code waits for the reply to `UserPromptSubmit` and `PreToolUse` hooks, up to the hook's timeout. Holding the reply until the snapshot is written puts the base before Claude's first edit. These two hooks get a 10-second timeout, and Blueprint holds the reply at most 8 seconds. Past their timeout, Claude Code goes on silently.
 - Claude Code also fires `UserPromptSubmit` for its own messages: `<task-notification>` when a background command ends, and `<agent-message from="…">` when a subagent hands back. A prompt that begins with either does not start a turn: This turn stays on the Developer's last prompt. It still marks the session Working. The format is not documented: Blueprint relies only on these two openings.
-- A refresh that finds a snapshot already running skips.
+- A refresh that finds a snapshot already running skips. While the shown range's base is read, a refresh says so at once instead.
 - Review state belongs to one Claude start of a tab, keyed by its start key like the hooks: the session base, the turn base and the touched paths. Restarting the tab replaces it. `/clear` keeps it, although Claude Code's `session_id` changes.
 
 ### Why not a file watcher
@@ -83,6 +95,7 @@ Known gaps, also listed in the use case:
 - A Developer edit made while a Claude `Bash` command runs counts as Claude's. So does one made while its permission prompt waits: the prompt falls between `PreToolUse` and `PostToolUse`.
 - A file that both Claude and the Developer changed counts as Claude's.
 - MCP tools are not in the `PreToolUse` and `PostToolUse` handling. Files they change count as outside Claude.
+- Files stored with Git LFS are not listed. Snapshots leave them out.
 
 One more gap, too fine for the use case:
 
@@ -118,3 +131,4 @@ Checked on 2026-11-21 with the built app and Claude Code 2.1.330, in manual mode
 ## Open checks
 
 - The store's trees can point at objects that live only in the repository. If the Developer's `git gc` prunes one during a session, a diff fails. Untested.
+- Clean filters run on each snapshot, from any attributes file: `.gitattributes`, `.git/info/attributes` or a global one. One that writes into the repository would write there on every snapshot. Git LFS's is the only such filter known, and it is left out. Untested with others.
