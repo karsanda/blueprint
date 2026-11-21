@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, statSync } from 'node:fs'
+import { dirname } from 'node:path'
 import { expect, test } from '@playwright/test'
 import { launch, probeCall, probeText, readLog, typeInto } from './launch'
 
@@ -23,7 +24,7 @@ test("Claude Code gets Blueprint's hooks in a private settings file, removed on 
     'UserPromptSubmit',
   ])
   for (const matchers of Object.values(settings.hooks)) {
-    expect(matchers[0]?.hooks[0]?.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/hook$/)
+    expect(matchers[0]?.hooks[0]?.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/hook\/[A-Za-z0-9-]+$/)
   }
 
   await typeInto(page, 'claude-1', 'p')
@@ -31,6 +32,7 @@ test("Claude Code gets Blueprint's hooks in a private settings file, removed on 
 
   await app.close()
   expect(existsSync(file)).toBe(false)
+  expect(existsSync(dirname(file))).toBe(false)
 })
 
 test('a Claude session starts idle', async () => {
@@ -128,5 +130,20 @@ test('a working session shows Needs you on its tab, pane and title bar when Clau
   await expect.poll(native).toBe('Needs you: Claude — Blueprint')
   await typeInto(page, 'claude-1', 's')
   await expect(page).toHaveTitle('Blueprint')
+  await app.close()
+})
+
+test('a session keeps its status after /clear', async () => {
+  const { app, page, log } = await launch()
+  const pane = page.locator('[data-tab="claude-1"]')
+  await expect.poll(() => probeText(page, 'claude-1')).toContain('claude ready')
+  await typeInto(page, 'claude-1', 'p')
+  await expect(pane).toHaveAttribute('data-status', 'working')
+  await typeInto(page, 'claude-1', 'c')
+  await expect.poll(() => readLog(log, 'claude.hooks')).toContain('clear\n')
+  await typeInto(page, 'claude-1', 'p?')
+  await expect(pane).toHaveAttribute('data-status', 'needs-you')
+  await typeInto(page, 'claude-1', 'x')
+  await expect(pane).toHaveAttribute('data-status', 'idle')
   await app.close()
 })

@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { StatusSignal } from '../../shared/api'
@@ -43,12 +43,22 @@ export function hookSettings(url: string, token: string): { hooks: Record<HookEv
   }
 }
 
-/** Writes settings.json into a fresh private temp dir. `remove()` deletes the dir and is safe to call twice. */
-export function writeHookSettings(settings: object): { file: string; remove(): void } {
-  const dir = mkdtempSync(join(tmpdir(), 'blueprint-hooks-'))
-  const file = join(dir, 'settings.json')
+/**
+ * Makes the private (0700) dir that holds the settings files. It lives in $XDG_RUNTIME_DIR when that
+ * is set and exists. `remove()` deletes the dir and is safe to call twice.
+ */
+export function createHookDir(): { dir: string; remove(): void } {
+  const runtime = process.env['XDG_RUNTIME_DIR']
+  const base = runtime && existsSync(runtime) ? runtime : tmpdir()
+  const dir = mkdtempSync(join(base, 'blueprint-hooks-'))
+  return { dir, remove: () => rmSync(dir, { recursive: true, force: true }) }
+}
+
+/** Writes the settings for one Claude start to `<dir>/<startKey>.json`, private to the Developer. */
+export function writeHookSettings(dir: string, startKey: string, settings: object): string {
+  const file = join(dir, `${startKey}.json`)
   writeFileSync(file, JSON.stringify(settings), { mode: 0o600 })
-  return { file, remove: () => rmSync(dir, { recursive: true, force: true }) }
+  return file
 }
 
 /** What a hook event tells Blueprint about the session's status, or null when it tells nothing. */

@@ -1,8 +1,16 @@
-import { existsSync, readFileSync, statSync } from 'node:fs'
-import { dirname } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { StatusSignal } from '../../shared/api'
-import { HOOK_EVENTS, hookSettings, signalFromHook, writeHookSettings, type HookInput } from './hooks'
+import {
+  createHookDir,
+  HOOK_EVENTS,
+  hookSettings,
+  signalFromHook,
+  writeHookSettings,
+  type HookInput,
+} from './hooks'
 
 describe('hookSettings', () => {
   it('points the five events at the listener with the token', () => {
@@ -42,17 +50,35 @@ describe('signalFromHook', () => {
   })
 })
 
-describe('writeHookSettings', () => {
-  it('writes a private file and removes it', () => {
+describe('createHookDir and writeHookSettings', () => {
+  afterEach(() => vi.unstubAllEnvs())
+
+  it('makes a private dir in XDG_RUNTIME_DIR and removes it', () => {
+    const runtime = mkdtempSync(join(tmpdir(), 'bp-runtime-'))
+    vi.stubEnv('XDG_RUNTIME_DIR', runtime)
+    const hookDir = createHookDir()
+    expect(dirname(hookDir.dir)).toBe(runtime)
+    expect(statSync(hookDir.dir).mode & 0o777).toBe(0o700)
+    hookDir.remove()
+    expect(existsSync(hookDir.dir)).toBe(false)
+    expect(() => hookDir.remove()).not.toThrow()
+    rmSync(runtime, { recursive: true })
+  })
+
+  it('falls back to the temp dir when XDG_RUNTIME_DIR does not exist', () => {
+    vi.stubEnv('XDG_RUNTIME_DIR', '/nonexistent/runtime')
+    const hookDir = createHookDir()
+    expect(dirname(hookDir.dir)).toBe(tmpdir())
+    hookDir.remove()
+  })
+
+  it('writes one private file per start key', () => {
+    const hookDir = createHookDir()
     const settings = { hooks: { Stop: [] } }
-    const written = writeHookSettings(settings)
-    const { file } = written
-    const dir = dirname(file)
+    const file = writeHookSettings(hookDir.dir, 'k1', settings)
+    expect(file).toBe(join(hookDir.dir, 'k1.json'))
     expect(statSync(file).mode & 0o777).toBe(0o600)
-    expect(statSync(dir).mode & 0o777).toBe(0o700)
     expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual(settings)
-    written.remove()
-    expect(existsSync(dir)).toBe(false)
-    expect(() => written.remove()).not.toThrow()
+    hookDir.remove()
   })
 })

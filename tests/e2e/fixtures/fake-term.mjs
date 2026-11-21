@@ -1,5 +1,6 @@
 // A stand-in for `claude` and the Developer's shell in e2e tests. It records what it receives
 // in $BLUEPRINT_TEST_LOG/<name>.<file>, so tests can check what reached the program.
+import { randomUUID } from 'node:crypto'
 import { appendFileSync, readFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
 
@@ -25,8 +26,9 @@ process.stdout.on('resize', () => out('size', size() + '\n'))
 
 // As `claude`, it reads Blueprint's hook settings once and posts hook events on keys.
 const arg = (flag) => process.argv[process.argv.indexOf(flag) + 1]
-const sessionId = arg('--session-id')
-const transcript = join(log, 'claude.transcript.jsonl')
+let sessionId = arg('--session-id')
+let transcript = join(log, 'claude.transcript.jsonl')
+let clears = 0
 const hook = (() => {
   if (name !== 'claude' || !process.argv.includes('--settings')) return null
   const settings = JSON.parse(readFileSync(arg('--settings'), 'utf8'))
@@ -60,6 +62,12 @@ const hookKeys = {
   n: () => post('Notification', { notification_type: 'permission_prompt' }),
   t: () => post('PostToolUse'),
   s: () => post('Stop'),
+  // Stands in for /clear: Claude Code gives the conversation a new session id and a new transcript.
+  c: () => {
+    sessionId = randomUUID()
+    transcript = join(log, `claude.transcript-${++clears}.jsonl`)
+    out('hooks', 'clear\n')
+  },
   x: () => appendFileSync(transcript, interrupt + '\n'),
   // Focus reporting stays off until a test asks: two tests check the exact bytes typed into the fake.
   r: () => process.stdout.write('\x1b[?1004h'),

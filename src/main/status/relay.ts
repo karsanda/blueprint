@@ -4,10 +4,19 @@ import { TranscriptFollower } from './transcript'
 
 type Follower = Pick<TranscriptFollower, 'follow' | 'unfollow' | 'unfollowAll'>
 
-/** Turns what Blueprint hears from Claude Code's hooks and transcripts into status signals for the right tab. */
+interface Start {
+  tabId: string
+  /** The session whose transcript this start follows. `/clear` changes it. */
+  sessionId?: string
+}
+
+/**
+ * Turns what Blueprint hears from Claude Code's hooks and transcripts into status signals for the right tab.
+ * Hooks are routed by the start key in their URL, because `/clear` gives a session a new id.
+ */
 export class StatusRelay {
-  private readonly tabBySession = new Map<string, string>()
-  private readonly sessionByTab = new Map<string, string>()
+  private readonly startByKey = new Map<string, Start>()
+  private readonly keyByTab = new Map<string, string>()
   private readonly follower: Follower
 
   constructor(
@@ -16,30 +25,34 @@ export class StatusRelay {
       new TranscriptFollower(onInterrupt),
   ) {
     this.follower = makeFollower((sessionId) => {
-      const tabId = this.tabBySession.get(sessionId)
-      if (tabId !== undefined) this.send(tabId, { kind: 'interrupted' })
+      for (const start of this.startByKey.values()) {
+        if (start.sessionId === sessionId) this.send(start.tabId, { kind: 'interrupted' })
+      }
     })
   }
 
-  /** A tab's new session replaces its previous one, which is no longer followed. */
-  register(tabId: string, sessionId: string): void {
-    const previous = this.sessionByTab.get(tabId)
+  /** A tab's new start replaces its previous one, whose transcript is no longer followed. */
+  register(tabId: string, startKey: string): void {
+    const previous = this.keyByTab.get(tabId)
     if (previous !== undefined) {
-      this.tabBySession.delete(previous)
-      this.follower.unfollow(previous)
+      const old = this.startByKey.get(previous)
+      if (old?.sessionId !== undefined) this.follower.unfollow(old.sessionId)
+      this.startByKey.delete(previous)
     }
-    this.sessionByTab.set(tabId, sessionId)
-    this.tabBySession.set(sessionId, tabId)
+    this.keyByTab.set(tabId, startKey)
+    this.startByKey.set(startKey, { tabId })
   }
 
-  hook(e: HookInput): void {
-    const tabId = this.tabBySession.get(e.session_id)
-    if (tabId === undefined) return
-    if (e.hook_event_name === 'UserPromptSubmit' && e.transcript_path) {
+  hook(startKey: string, e: HookInput): void {
+    const start = this.startByKey.get(startKey)
+    if (start === undefined) return
+    if (e.hook_event_name === 'UserPromptSubmit' && e.transcript_path && start.sessionId !== e.session_id) {
+      if (start.sessionId !== undefined) this.follower.unfollow(start.sessionId)
+      start.sessionId = e.session_id
       this.follower.follow(e.session_id, e.transcript_path)
     }
     const signal = signalFromHook(e)
-    if (signal) this.send(tabId, signal)
+    if (signal) this.send(start.tabId, signal)
   }
 
   close(): void {

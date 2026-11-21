@@ -10,21 +10,49 @@ afterEach(async () => {
 
 async function start() {
   const events: HookInput[] = []
-  listener = await startHookListener((e) => events.push(e))
-  return { events, l: listener }
+  const keys: string[] = []
+  listener = await startHookListener((key, e) => {
+    keys.push(key)
+    events.push(e)
+  })
+  return { events, keys, l: listener }
 }
 
-const post = (l: HookListener, body: string, auth: string | null = `Bearer ${l.token}`) =>
-  fetch(l.url, { method: 'POST', body, headers: auth ? { Authorization: auth } : {} })
+const post = (l: HookListener, body: string, auth: string | null = `Bearer ${l.token}`, key = 'k1') =>
+  fetch(`${l.url}/${key}`, { method: 'POST', body, headers: auth ? { Authorization: auth } : {} })
 
 describe('hook listener', () => {
   it('passes a hook event on and answers 204 with no body', async () => {
-    const { events, l } = await start()
+    const { events, keys, l } = await start()
     const event = { hook_event_name: 'Stop', session_id: 's1' }
     const res = await post(l, JSON.stringify(event))
     expect(res.status).toBe(204)
     expect(await res.text()).toBe('')
     await expect.poll(() => events).toEqual([event])
+    expect(keys).toEqual(['k1'])
+  })
+
+  it('answers 404 without a valid start key', async () => {
+    const { events, l } = await start()
+    const auth = { Authorization: `Bearer ${l.token}` }
+    const body = JSON.stringify({ hook_event_name: 'Stop', session_id: 's1' })
+    for (const path of ['/hook', '/hook/', '/hook/bad key!', `/hook/${'a'.repeat(65)}`]) {
+      const url = new URL(l.url).origin + path.replace(' ', '%20')
+      expect((await fetch(url, { method: 'POST', body, headers: auth })).status).toBe(404)
+    }
+    expect(events).toEqual([])
+  })
+
+  it('answers 204 and keeps serving when the handler throws', async () => {
+    let calls = 0
+    listener = await startHookListener(() => {
+      calls++
+      throw new Error('boom')
+    })
+    const body = JSON.stringify({ hook_event_name: 'Stop', session_id: 's1' })
+    expect((await post(listener, body)).status).toBe(204)
+    expect((await post(listener, body)).status).toBe(204)
+    await expect.poll(() => calls).toBe(2)
   })
 
   it('refuses requests without the token', async () => {
@@ -39,9 +67,10 @@ describe('hook listener', () => {
     const { l } = await start()
     const auth = { Authorization: `Bearer ${l.token}` }
     expect(
-      (await fetch(l.url.replace('/hook', '/other'), { method: 'POST', body: '{}', headers: auth })).status,
+      (await fetch(l.url.replace('/hook', '/other') + '/k1', { method: 'POST', body: '{}', headers: auth }))
+        .status,
     ).toBe(404)
-    expect((await fetch(l.url, { headers: auth })).status).toBe(404)
+    expect((await fetch(`${l.url}/k1`, { headers: auth })).status).toBe(404)
   })
 
   it('drops bodies that are not hook events and keeps serving', async () => {

@@ -8,6 +8,7 @@ export interface HookListener {
   close(): Promise<void>
 }
 
+const HOOK_PATH = /^\/hook\/([A-Za-z0-9-]{1,64})$/
 const MAX_BODY = 32 * 1024 * 1024
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -49,22 +50,33 @@ function readBody(req: IncomingMessage, res: ServerResponse, onBody: (body: stri
   })
 }
 
-/** Listens on 127.0.0.1 for Claude Code's HTTP hooks. Requests need the bearer token. Replies are always empty. */
-export async function startHookListener(onEvent: (e: HookInput) => void): Promise<HookListener> {
+/**
+ * Listens on 127.0.0.1 for Claude Code's HTTP hooks, posted to /hook/<startKey>. Requests need the
+ * bearer token. Replies are always empty.
+ */
+export async function startHookListener(
+  onEvent: (startKey: string, e: HookInput) => void,
+): Promise<HookListener> {
   const token = randomBytes(24).toString('hex')
   const server = createServer((req, res) => {
     if (req.headers.authorization !== `Bearer ${token}`) {
       res.writeHead(403).end()
       return
     }
-    if (req.method !== 'POST' || req.url !== '/hook') {
+    const startKey = req.method === 'POST' ? HOOK_PATH.exec(req.url ?? '')?.[1] : undefined
+    if (startKey === undefined) {
       res.writeHead(404).end()
       return
     }
     readBody(req, res, (body) => {
       res.writeHead(204).end()
       const event = parseHookInput(body)
-      if (event) onEvent(event)
+      if (!event) return
+      try {
+        onEvent(startKey, event)
+      } catch {
+        // A failing handler must not take the main process down.
+      }
     })
   })
   await new Promise<void>((resolve, reject) => {

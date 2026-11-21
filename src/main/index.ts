@@ -1,10 +1,10 @@
 import { basename, join } from 'node:path'
-import { app, BrowserWindow, Menu, shell } from 'electron'
+import { app, BrowserWindow, dialog, Menu, shell } from 'electron'
 import { resolveFolder } from './folder'
 import { type IpcDeps, registerIpc } from './ipc'
 import { NeedsYouNotifier } from './notify'
-import { hookSettings, writeHookSettings } from './status/hooks'
-import { startHookListener } from './status/listener'
+import { createHookDir, hookSettings, writeHookSettings } from './status/hooks'
+import { type HookListener, startHookListener } from './status/listener'
 import { StatusRelay } from './status/relay'
 import { TerminalManager } from './terminal/manager'
 
@@ -58,8 +58,17 @@ void app.whenReady().then(async () => {
     if (win && !win.webContents.isDestroyed()) win.webContents.send(channel, ...args)
   }
   const relay = new StatusRelay((tabId, signal) => send('status:signal', tabId, signal))
-  const listener = await startHookListener((e) => relay.hook(e))
-  const settings = writeHookSettings(hookSettings(listener.url, listener.token))
+  let listener: HookListener
+  let hookDir: ReturnType<typeof createHookDir>
+  try {
+    listener = await startHookListener((startKey, e) => relay.hook(startKey, e))
+    hookDir = createHookDir()
+  } catch (err) {
+    // A window without status would show Idle while Claude waits, which is worse than no window.
+    dialog.showErrorBox('Blueprint could not start', err instanceof Error ? err.message : String(err))
+    app.quit()
+    return
+  }
   win = createWindow()
   const manager = new TerminalManager({
     data: (tabId, data) => send('terminal:data', tabId, data),
@@ -75,7 +84,8 @@ void app.whenReady().then(async () => {
       () => basename(deps.folder.folder ?? ''),
       (tabId) => send('status:focus', tabId),
     ),
-    settingsFile: settings.file,
+    hookSettingsFor: (startKey) =>
+      writeHookSettings(hookDir.dir, startKey, hookSettings(`${listener.url}/${startKey}`, listener.token)),
   }
   registerIpc(win, deps)
   // Both events fire on quit, so the cleanup runs once.
@@ -86,7 +96,7 @@ void app.whenReady().then(async () => {
     cleaned = true
     void listener.close()
     relay.close()
-    settings.remove()
+    hookDir.remove()
   }
   // No terminal outlives the window: quitting ends every Claude session and shell.
   app.on('window-all-closed', () => {
