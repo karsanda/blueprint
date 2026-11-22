@@ -32,14 +32,28 @@ const NESTING = [
   'AI_AGENT',
 ]
 
-export function terminalEnv(base: NodeJS.ProcessEnv): Record<string, string> {
+export function terminalEnv(
+  base: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform = process.platform,
+  locale: string = Intl.DateTimeFormat().resolvedOptions().locale,
+): Record<string, string> {
   const env: Record<string, string> = {}
   for (const [key, value] of Object.entries(base)) {
     if (value !== undefined && !NESTING.includes(key)) env[key] = value
   }
   env['TERM'] = 'xterm-256color'
   env['COLORTERM'] = 'truecolor'
+  // A macOS app opened from Finder gets no locale (Terminal.app sets one itself), and shells would then
+  // show non-ASCII text as escapes. One the Developer set always wins.
+  if (platform === 'darwin' && !env['LANG'] && !env['LC_ALL'] && !env['LC_CTYPE'])
+    env['LANG'] = utf8Locale(locale)
   return env
+}
+
+/** A UTF-8 locale for a BCP 47 tag: `pt-BR` gives `pt_BR.UTF-8`; a tag without a region gives `en_US.UTF-8`. */
+function utf8Locale(tag: string): string {
+  const [language, region] = tag.split('-')
+  return language && region && /^[A-Z]{2}$/.test(region) ? `${language}_${region}.UTF-8` : 'en_US.UTF-8'
 }
 
 export function claudeSpec(
@@ -69,7 +83,12 @@ export function claudeSpec(
   }
 }
 
-export function shellSpec(folder: string, base: NodeJS.ProcessEnv): SpawnSpec {
+export function shellSpec(
+  folder: string,
+  base: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform = process.platform,
+): SpawnSpec {
   const file = base['SHELL'] || userInfo().shell || '/bin/sh'
-  return { file, args: [], cwd: folder, env: terminalEnv(base) }
+  // On macOS shells start as login shells, as Terminal.app starts them, so ~/.zprofile runs (Homebrew's PATH).
+  return { file, args: platform === 'darwin' ? ['-l'] : [], cwd: folder, env: terminalEnv(base) }
 }

@@ -16,7 +16,10 @@
     "format:check": "oxfmt --check",
     "test": "vitest run",
     "e2e": "electron-vite build && playwright test",
-    "shots": "electron-vite build && playwright test --config playwright.shots.config.ts"
+    "shots": "electron-vite build && playwright test --config playwright.shots.config.ts",
+    "package:linux": "electron-vite build && electron-builder --linux deb --publish never",
+    "package:mac": "electron-vite build && electron-builder --mac dmg --arm64 --publish never",
+    "postinstall": "node scripts/fix_node_pty.cjs"
   },
   "dependencies": {
     "node-pty": "1.1.0"
@@ -39,6 +42,7 @@
     "clsx": "2.1.1",
     "dockview-react": "8.9.1",
     "electron": "45.4.1",
+    "electron-builder": "26.18.0",
     "electron-vite": "6.0.0",
     "lucide-react": "1.77.0",
     "oxfmt": "0.79.0",
@@ -54,5 +58,7 @@
     "vitest": "5.1.1",
     "zustand": "5.1.0"
   },
-  "packageManager": "pnpm@12.21.0"
+  "packageManager": "pnpm@12.21.0",
+  "desktopName": "blueprint.desktop",
+  "productName": "Blueprint"
 }

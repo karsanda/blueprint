@@ -1,8 +1,13 @@
+import { userInfo } from 'node:os'
 import { basename, join } from 'node:path'
+import { spawn } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
 import { app, BrowserWindow, dialog, Menu, net, protocol, screen, shell, type WebContents } from 'electron'
 import type { WindowBounds } from '../shared/api'
+import { detachedArgs, devUserData, shouldDetach, takeDetachMarker } from './detach'
+import { loginEnvironment, mergeEnvironment, needsLoginEnvironment } from './environment'
 import { resolveFolder } from './folder'
+import { macMenuTemplate } from './menu'
 import { type IpcDeps, registerIpc } from './ipc'
 import { initialWindow, layoutFile, readLayout, writeLayout } from './layout/store'
 import { isPopoutUrl, rendererFile } from './protocol'
@@ -80,13 +85,33 @@ function guardWindow(
   })
 }
 
+// `blueprint <folder>` from a terminal: hand over to a detached copy and give the prompt back.
+const isCopy = takeDetachMarker(process.env)
+if (shouldDetach({ packaged: app.isPackaged, stdinIsTTY: process.stdin.isTTY, isCopy })) {
+  spawn(process.execPath, detachedArgs(process.argv, process.cwd()), {
+    detached: true,
+    stdio: 'ignore',
+    env: { ...process.env, BLUEPRINT_DETACHED: '1' },
+  }).unref()
+  process.exit(0)
+}
+
+// `pnpm dev` keeps its settings apart from the installed app's.
+const devData = devUserData({
+  packaged: app.isPackaged,
+  name: app.getName(),
+  appData: app.getPath('appData'),
+})
+if (devData) app.setPath('userData', devData)
+
 // dockview refuses to pop a pane out of a `file:` page, so the renderer is served from blueprint://app/.
 protocol.registerSchemesAsPrivileged([
   { scheme: 'blueprint', privileges: { standard: true, secure: true, supportFetchAPI: true } },
 ])
 
-// No app menu: its shortcuts (Ctrl+W closes, Ctrl+R reloads) would take keys from the terminals.
-Menu.setApplicationMenu(null)
+// No app menu on Ubuntu: its shortcuts (Ctrl+W closes, Ctrl+R reloads) would take keys from the terminals.
+// macOS gets a small standard one, for Cmd+C, Cmd+V and Cmd+Q.
+Menu.setApplicationMenu(process.platform === 'darwin' ? Menu.buildFromTemplate(macMenuTemplate()) : null)
 
 void app.whenReady().then(async () => {
   const rendererDir = join(__dirname, '../renderer')
@@ -94,6 +119,12 @@ void app.whenReady().then(async () => {
     const file = rendererFile(rendererDir, request.url)
     return file ? net.fetch(pathToFileURL(file).toString()) : new Response(null, { status: 404 })
   })
+  // Started by the desktop, Blueprint takes the login shell's environment before it starts any program, so
+  // Claude Code and its tools find what the Developer's terminal would.
+  if (needsLoginEnvironment(process.env)) {
+    const login = await loginEnvironment(process.env['SHELL'] || userInfo().shell || '/bin/sh')
+    if (login) process.env = mergeEnvironment(process.env, login)
+  }
   const folder = resolveFolder(process.argv, { packaged: app.isPackaged, cwd: process.cwd() })
   // The window is created after the listener and settings file exist, so every handler is
   // there before the renderer loads.
@@ -184,7 +215,22 @@ void app.whenReady().then(async () => {
     cleanUp()
     app.quit()
   })
-  app.on('before-quit', cleanUp)
+  // Quit (Cmd+Q on macOS) closes the windows in the system's order, pop-outs first there. A pop-out that
+  // closes docks its pane back before the main window saves the layout, so the pop-out would not come back.
+  // So the main window closes first; it closes its pop-outs, and the last window to close quits.
+  let closingMain = false
+  app.on('before-quit', (event) => {
+    if (!closingMain && win && !win.isDestroyed() && BrowserWindow.getAllWindows().length > 1) {
+      closingMain = true
+      event.preventDefault()
+      win.once('closed', () => {
+        for (const other of BrowserWindow.getAllWindows()) other.close()
+      })
+      win.close()
+      return
+    }
+    cleanUp()
+  })
 })
 
 /** Saves the window's normal bounds 500 ms after the last move or resize, and at once on close. */

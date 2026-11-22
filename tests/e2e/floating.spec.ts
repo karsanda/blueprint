@@ -53,6 +53,7 @@ test('Dock with the neighbour gone docks at the right edge', async () => {
   await expect.poll(() => probeText(page, 'claude-2')).toContain('claude ready')
   await paneMenu(page, 'Difference', 'Float')
   await expect(floating(page)).toHaveCount(1)
+  await tab(page, 'Claude 2').hover()
   await tab(page, 'Claude 2').locator('.dv-default-tab-action').click()
   await expect(tab(page, 'Claude 2')).toHaveCount(0)
 

@@ -43,6 +43,7 @@ out(
     pid: process.pid,
     cols: process.stdout.columns,
     rows: process.stdout.rows,
+    env: { BLUEPRINT_LOGIN_MARK: process.env.BLUEPRINT_LOGIN_MARK, PATH: process.env.PATH },
   }) + '\n',
 )
 process.stdin.setRawMode(true)

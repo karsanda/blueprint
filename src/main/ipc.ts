@@ -60,7 +60,9 @@ export function registerIpc(win: BrowserWindow, deps: IpcDeps, userData: string)
     deps.review.endSession(tabId)
     deps.notifier.forget(tabId)
   })
-  ipcMain.handle('terminal:foreground', (_e, tabId: string): string | null => deps.manager.foreground(tabId))
+  ipcMain.handle('terminal:foreground', (_e, tabId: string): Promise<string | null> =>
+    deps.manager.foreground(tabId),
+  )
   ipcMain.on('terminal:write', (_e, tabId: string, data: string) => deps.manager.write(tabId, data))
   ipcMain.on('terminal:resize', (_e, tabId: string, cols: number, rows: number) =>
     deps.manager.resize(tabId, cols, rows),
@@ -86,6 +88,7 @@ export function registerIpc(win: BrowserWindow, deps: IpcDeps, userData: string)
   })
 
   ipcMain.on('clipboard:write', (_e, text: string) => clipboard.writeText(text))
+  ipcMain.handle('clipboard:read', async (): Promise<string> => clipboard.readText())
 }
 
 async function startTerminal(deps: IpcDeps, req: StartRequest): Promise<StartResult> {

@@ -4,10 +4,11 @@ import { expect, type Locator, type Page, test } from '@playwright/test'
 import { layoutFile } from '../../src/main/layout/store'
 import { dropTab, launch, probeText } from './launch'
 
+// 800 × 600 at (100, 80) fits every test screen, the macOS runner's 1024 × 768 included.
 test('the window comes back at the same size and place', async () => {
   const first = await launch()
   await first.app.evaluate(({ BrowserWindow }) =>
-    BrowserWindow.getAllWindows()[0]?.setBounds({ x: 100, y: 80, width: 1000, height: 700 }),
+    BrowserWindow.getAllWindows()[0]?.setBounds({ x: 100, y: 80, width: 800, height: 600 }),
   )
   await first.page.waitForTimeout(1000)
   await first.app.close()
@@ -23,8 +24,8 @@ test('the window comes back at the same size and place', async () => {
       expect(Math.abs((bounds?.x ?? 0) - 100)).toBeLessThanOrEqual(2)
       expect(Math.abs((bounds?.y ?? 0) - 80)).toBeLessThanOrEqual(2)
     }
-    expect(Math.abs((bounds?.width ?? 0) - 1000)).toBeLessThanOrEqual(2)
-    expect(Math.abs((bounds?.height ?? 0) - 700)).toBeLessThanOrEqual(2)
+    expect(Math.abs((bounds?.width ?? 0) - 800)).toBeLessThanOrEqual(2)
+    expect(Math.abs((bounds?.height ?? 0) - 600)).toBeLessThanOrEqual(2)
   } finally {
     await second.app.close()
   }
@@ -137,7 +138,10 @@ test('the layout is the same when the Developer reopens the Folder', async () =>
 
 test('a Folder opened for the first time gets the default layout', async () => {
   const first = await launch()
-  await dropTab(first.page, 'Shell', 600, 300)
+  await expect.poll(() => probeText(first.page, 'shell-1')).toContain('fake-shell ready')
+  // The middle of the Claude pane, wherever the window's size puts it.
+  const claude = (await groupWith(first.page, 'Claude').boundingBox())!
+  await dropTab(first.page, 'Shell', claude.x + claude.width / 2, claude.y + claude.height / 2)
   await expect(first.page.locator('.dv-groupview')).toHaveCount(3)
   await first.page.waitForTimeout(1000)
   await first.app.close()
@@ -287,7 +291,7 @@ test('a Folder closed while zoomed reopens unzoomed', async () => {
 
 test('a Folder picked after the window opened gets its window back', async () => {
   const { folder, home, file } = await layoutFileOf()
-  const saved = { x: 100, y: 80, width: 1000, height: 700, maximized: false }
+  const saved = { x: 100, y: 80, width: 800, height: 600, maximized: false }
   mkdirSync(dirname(file), { recursive: true })
   writeFileSync(file, JSON.stringify({ version: 1, folder, window: saved }))
   const run = await launch({ folder: null, home })
@@ -301,8 +305,8 @@ test('a Folder picked after the window opened gets its window back', async () =>
     )
     expect(Math.abs((bounds?.x ?? 0) - 100)).toBeLessThanOrEqual(2)
     expect(Math.abs((bounds?.y ?? 0) - 80)).toBeLessThanOrEqual(2)
-    expect(Math.abs((bounds?.width ?? 0) - 1000)).toBeLessThanOrEqual(2)
-    expect(Math.abs((bounds?.height ?? 0) - 700)).toBeLessThanOrEqual(2)
+    expect(Math.abs((bounds?.width ?? 0) - 800)).toBeLessThanOrEqual(2)
+    expect(Math.abs((bounds?.height ?? 0) - 600)).toBeLessThanOrEqual(2)
   } finally {
     await run.app.close()
   }

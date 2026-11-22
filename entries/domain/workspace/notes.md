@@ -9,7 +9,7 @@ Code-level detail for [Arrange my panes](../../usecase/blueprint/arrange_my_pane
 - Layout: dockview (React). Panes are dockview groups, tabs are dockview panels. dockview handles drop zones, splits, resize handles, floating groups and pop-out windows.
 - Default layout: Changes, a narrow pane on the left at full height; Claude in the middle and Difference on the right; Shell below them both. The Changes and Difference panes are described in [Review](../review/notes.md).
 - Terminal tabs stay mounted when hidden (dockview `renderer: 'always'`). Only visible terminals should keep a WebGL renderer, because Chromium allows about 16 WebGL contexts; that matters once several sessions run, and is not built yet.
-- Blueprint has no app menu: Electron's default one would take Ctrl+W, Ctrl+R and Ctrl+V from the terminals.
+- Blueprint has no app menu on Ubuntu: Electron's default one would take Ctrl+W, Ctrl+R and Ctrl+V from the terminals. macOS gets a small standard menu, for Cmd+C, Cmd+V and Cmd+Q (see [Release](../release/notes.md)).
 - Copy is Ctrl+Shift+C, handled by Blueprint. Paste is Chromium's own Ctrl+Shift+V and Shift+Insert: xterm receives them as a paste event and adds bracketed-paste marks. Handling paste in Blueprint as well would paste twice.
 - Ligatures: the add-on cannot read the bundled Cascadia file from a sandboxed window, so it uses its built-in list of common ligatures (`=>`, `!=`, `===`, `->`, `<=` …). Blueprint denies all browser permission requests.
 - dockview quirks: it sets an inline `outline: none` on each pane, so pane outlines need `!important`; its containers clip anything outside a pane, so pane views get 4px padding for the outer rule; it hides panes behind a zoomed one by giving their view zero width. A terminal in a pane with no size is never fitted: fitting would squeeze its program to 2 columns.
@@ -36,7 +36,8 @@ Code-level detail for [Arrange my panes](../../usecase/blueprint/arrange_my_pane
     - Closing ends the tab's terminal, which hangs up the programs in it.
   - Why the foreground process group and not the program's name: the shell's own name cannot be compared reliably. A `#!/usr/bin/env node` script reads as `node`, and a login shell as `-zsh`. Checked in a pseudo-terminal with `/bin/sh`, bash and zsh: `tpgid` is the shell's pid at the prompt, and `sleep`'s while `sleep 5` runs.
   - Restored layouts accept `shell-<n>` tabs (terminal, kind `shell`). See Remembering the layout.
-  - Known gaps: the check is Linux only; macOS can read the same with `ps -o tpgid=`. A job sent to the background with `&` does not count as running, and closing ends it with the shell. A program a shell's key binding starts, such as fzf from zsh's Alt+c, runs in the shell's own process group, so it does not count as running either.
+  - On macOS the check lists processes with `ps` instead of reading `/proc` (see [Release](../release/notes.md)).
+  - Known gaps: a job sent to the background with `&` does not count as running, and closing ends it with the shell. A program a shell's key binding starts, such as fzf from zsh's Alt+c, runs in the shell's own process group, so it does not count as running either.
   - Checked in the real app: the built app with the Developer's zsh and its usual prompt, in a scratch Folder, on 2026-11-22.
     - New shell opened Shell 2 as the active tab, and `pwd` in it printed the Folder.
     - `vim` (an alias for nvim) in Shell 2 made closing it ask: "Close Shell 2?", "It is still running nvim." After Close shell, both nvim processes were gone.

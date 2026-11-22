@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, test } from 'vitest'
 import type { ExitInfo } from '../../shared/api'
+import { foregroundProgramMac } from './foreground'
 import { TerminalManager } from './manager'
 import { terminalEnv, type SpawnSpec } from './spec'
 
@@ -74,16 +75,32 @@ test('resizes the program', async () => {
 test('a shell runs a command in its foreground until it ends', async () => {
   manager.start('t', { file: '/bin/sh', args: ['-i'], cwd: tmp, env: terminalEnv(process.env) }, 80, 24)
   manager.write('t', 'sleep 5\n')
-  await waitFor(() => manager.foreground('t') === 'sleep')
+  await expect.poll(() => manager.foreground('t'), { timeout: 3000 }).toBe('sleep')
   manager.write('t', '\x03')
-  await waitFor(() => manager.foreground('t') === null)
-  expect(manager.foreground('none')).toBeNull()
+  await expect.poll(() => manager.foreground('t'), { timeout: 3000 }).toBeNull()
+  expect(await manager.foreground('none')).toBeNull()
 })
 
 test('a pipeline stays in the foreground after its first command ends', async () => {
   manager.start('t', { file: '/bin/sh', args: ['-i'], cwd: tmp, env: terminalEnv(process.env) }, 80, 24)
   manager.write('t', 'true | sleep 5\n')
   await expect.poll(() => manager.foreground('t'), { timeout: 3000 }).toBe('sleep')
+})
+
+test('the ps check names the same program as the platform check', async () => {
+  const pid = manager.start(
+    't',
+    { file: '/bin/sh', args: ['-i'], cwd: tmp, env: terminalEnv(process.env) },
+    80,
+    24,
+  )
+  manager.write('t', 'sleep 5\n')
+  await expect.poll(() => foregroundProgramMac(pid), { timeout: 3000 }).toBe('sleep')
+  manager.write('t', '\x03')
+  await expect.poll(() => foregroundProgramMac(pid), { timeout: 3000 }).toBeNull()
+  // A pipeline whose first command has ended.
+  manager.write('t', 'true | sleep 5\n')
+  await expect.poll(() => foregroundProgramMac(pid), { timeout: 3000 }).toBe('sleep')
 })
 
 test('clamps an unknown size', async () => {

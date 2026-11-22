@@ -30,7 +30,10 @@ test('a resumed start passes --resume and no --session-id', () => {
 })
 
 test('terminalEnv drops the Claude Code nesting variables', () => {
-  const env = terminalEnv({ CLAUDECODE: '1', CLAUDE_CODE_ENTRYPOINT: 'cli', FOO: 'x', GONE: undefined })
+  const env = terminalEnv(
+    { CLAUDECODE: '1', CLAUDE_CODE_ENTRYPOINT: 'cli', FOO: 'x', GONE: undefined },
+    'linux',
+  )
   expect(env).toEqual({ FOO: 'x', TERM: 'xterm-256color', COLORTERM: 'truecolor' })
 })
 
@@ -48,10 +51,13 @@ test("terminalEnv drops the parent session's markers but keeps Claude Code setti
     'CLAUDE_EFFORT',
     'AI_AGENT',
   ]
-  const env = terminalEnv({
-    ...Object.fromEntries(markers.map((m) => [m, 'x'])),
-    CLAUDE_CODE_USE_BEDROCK: '1',
-  })
+  const env = terminalEnv(
+    {
+      ...Object.fromEntries(markers.map((m) => [m, 'x'])),
+      CLAUDE_CODE_USE_BEDROCK: '1',
+    },
+    'linux',
+  )
   expect(env).toEqual({ CLAUDE_CODE_USE_BEDROCK: '1', TERM: 'xterm-256color', COLORTERM: 'truecolor' })
 })
 
@@ -64,7 +70,7 @@ test('claudeSpec explains a missing claude', () => {
 })
 
 test('shellSpec uses $SHELL', () => {
-  expect(shellSpec('/work/proj', { SHELL: '/usr/bin/fish' })).toMatchObject({
+  expect(shellSpec('/work/proj', { SHELL: '/usr/bin/fish' }, 'linux')).toMatchObject({
     file: '/usr/bin/fish',
     args: [],
     cwd: '/work/proj',
@@ -73,4 +79,19 @@ test('shellSpec uses $SHELL', () => {
 
 test('shellSpec falls back to the account shell', () => {
   expect(shellSpec('/work/proj', {}).file).toBe(userInfo().shell ?? '/bin/sh')
+})
+
+test('shells start as login shells on macOS only', () => {
+  expect(shellSpec('/work/proj', { SHELL: '/bin/zsh' }, 'darwin').args).toEqual(['-l'])
+  expect(shellSpec('/work/proj', { SHELL: '/bin/zsh' }, 'linux').args).toEqual([])
+})
+
+test('a macOS Blueprint opened from Finder gives its terminals a UTF-8 locale', () => {
+  expect(terminalEnv({}, 'darwin', 'pt-BR')['LANG']).toBe('pt_BR.UTF-8')
+  expect(terminalEnv({}, 'darwin', 'en')['LANG']).toBe('en_US.UTF-8')
+  // A locale the Developer set is theirs.
+  expect(terminalEnv({ LC_ALL: 'C' }, 'darwin', 'pt-BR')['LANG']).toBeUndefined()
+  expect(terminalEnv({ LANG: 'de_DE.UTF-8' }, 'darwin', 'pt-BR')['LANG']).toBe('de_DE.UTF-8')
+  // Ubuntu's desktop always gives one.
+  expect(terminalEnv({}, 'linux', 'pt-BR')['LANG']).toBeUndefined()
 })

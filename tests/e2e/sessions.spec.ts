@@ -18,6 +18,12 @@ function closeAction(page: Page, title: string): Locator {
   return tab(page, title).locator('.dv-default-tab-action')
 }
 
+/** Clicks a tab's close action as the Developer does: hovering the tab first, which shows it on an inactive tab. */
+async function clickClose(page: Page, title: string): Promise<void> {
+  await tab(page, title).hover()
+  await closeAction(page, title).click()
+}
+
 async function stubUnfocused(app: ElectronApplication): Promise<void> {
   await app.evaluate(({ BrowserWindow, Notification }) => {
     const win = BrowserWindow.getAllWindows()[0]
@@ -67,7 +73,7 @@ test('closing a working session asks first', async () => {
   await typeInto(page, 'claude-2', 'p')
   await expect(page.locator('[data-tab="claude-2"]')).toHaveAttribute('data-status', 'working')
 
-  await closeAction(page, 'Claude 2').click()
+  await clickClose(page, 'Claude 2')
   const dialog = page.getByRole('dialog')
   await expect(dialog.getByText('Close Claude 2?')).toBeVisible()
   await expect(dialog.getByText('It is still working.')).toBeVisible()
@@ -75,7 +81,7 @@ test('closing a working session asks first', async () => {
   await expect(dialog).toBeHidden()
   await expect(tab(page, 'Claude 2')).toBeVisible()
 
-  await closeAction(page, 'Claude 2').click()
+  await clickClose(page, 'Claude 2')
   await page.getByRole('dialog').getByRole('button', { name: 'Close session' }).click()
   await expect(tab(page, 'Claude 2')).toHaveCount(0)
   await expect.poll(() => alive(pid)).toBe(false)
@@ -87,7 +93,7 @@ test('an idle session closes at once', async () => {
   await expect.poll(() => probeText(page, 'claude-1')).toContain('claude ready')
   await openSession(page, 'Claude', 'claude-2')
   await expect(page.locator('[data-tab="claude-2"]')).toHaveAttribute('data-status', 'idle')
-  await closeAction(page, 'Claude 2').click()
+  await clickClose(page, 'Claude 2')
   await expect(tab(page, 'Claude 2')).toHaveCount(0)
   await expect(page.getByRole('dialog')).toHaveCount(0)
   await app.close()
@@ -103,7 +109,7 @@ test('the last Claude tab has no close action', async () => {
   await expect(
     page.locator('.dv-tab', { hasText: /^\s*Claude\s*$/ }).locator('.dv-default-tab-action'),
   ).toHaveCount(1)
-  await closeAction(page, 'Claude 2').click()
+  await clickClose(page, 'Claude 2')
   await expect(page.locator('.dv-tab .dv-default-tab-action')).toHaveCount(0)
   await app.close()
 })
@@ -117,7 +123,7 @@ test('a closed session that needed the Developer leaves the window title', async
   await expect.poll(() => page.title()).toBe('Needs you: Claude 2 — Blueprint')
   await expect.poll(() => app.evaluate(() => globalThis.shown?.length)).toBe(1)
 
-  await closeAction(page, 'Claude 2').click()
+  await clickClose(page, 'Claude 2')
   await expect(page.getByRole('dialog').getByText('It is waiting for your answer.')).toBeVisible()
   await page.getByRole('dialog').getByRole('button', { name: 'Close session' }).click()
   await expect(tab(page, 'Claude 2')).toHaveCount(0)
@@ -131,7 +137,7 @@ test('new sessions count on from the highest open number', async () => {
   const { app, page } = await launch()
   await expect.poll(() => probeText(page, 'claude-1')).toContain('claude ready')
   for (const n of [2, 3, 4, 5]) await openSession(page, 'Claude', `claude-${n}`)
-  await closeAction(page, 'Claude 3').click()
+  await clickClose(page, 'Claude 3')
   await expect(tab(page, 'Claude 3')).toHaveCount(0)
   await openSession(page, 'Claude 2', 'claude-6')
   await expect(tab(page, 'Claude 6')).toBeVisible()
@@ -143,7 +149,7 @@ test('a closed session number is not given to the next session', async () => {
   const { app, page } = await launch()
   await expect.poll(() => probeText(page, 'claude-1')).toContain('claude ready')
   await openSession(page, 'Claude', 'claude-2')
-  await closeAction(page, 'Claude 2').click()
+  await clickClose(page, 'Claude 2')
   await expect(tab(page, 'Claude 2')).toHaveCount(0)
   await openSession(page, 'Claude', 'claude-3')
   await expect(tab(page, 'Claude 3')).toBeVisible()
@@ -155,7 +161,7 @@ test('a session closed while it is starting leaves no program behind', async () 
   const { app, page, log } = await launch()
   await expect.poll(() => probeText(page, 'claude-1')).toContain('claude ready')
   await groupWith(page, 'Claude').getByRole('button', { name: 'New Claude session' }).click()
-  await closeAction(page, 'Claude 2').click()
+  await clickClose(page, 'Claude 2')
   await page.waitForTimeout(1000)
   await expect(tab(page, 'Claude 2')).toHaveCount(0)
   const started = readLog(log, 'claude2.start')
@@ -247,7 +253,7 @@ test('closing the shown session moves the Changes pane to another', async () => 
   const { app, page } = await twoSessions()
   await focusClaude(page, 'Claude 2')
   await expect(header(page)).toHaveText('Claude 2')
-  await closeAction(page, 'Claude 2').click()
+  await clickClose(page, 'Claude 2')
   await expect(tab(page, 'Claude 2')).toHaveCount(0)
   await expect(header(page)).toHaveText('Claude')
   await app.close()
@@ -260,7 +266,7 @@ test("a closed session's Changes keep its name", async () => {
   await typeIn(page, log, 'Claude 2', 'claude-2', 'pes')
   await expect(tab(page, 'Claude 2').getByRole('img', { name: /^Overlap/ })).toBeVisible()
   await focusClaude(page, 'Claude 2')
-  await closeAction(page, 'Claude 2').click()
+  await clickClose(page, 'Claude 2')
   await expect(tab(page, 'Claude 2')).toHaveCount(0)
   await page.getByRole('button', { name: 'This session' }).click()
   await expect(row(page, 'claude2-1.txt').getByRole('img', { name: 'Claude 2', exact: true })).toBeVisible()
@@ -272,7 +278,7 @@ async function rename(page: Page, from: string, to: string): Promise<void> {
   await tab(page, from).locator('.dv-default-tab-content, .bp-tab-name').first().dblclick()
   const field = page.getByRole('textbox', { name: 'Session name' })
   await expect(field).toBeFocused()
-  await page.keyboard.press('Control+A')
+  await page.keyboard.press('ControlOrMeta+A')
   await page.keyboard.type(to)
   await page.keyboard.press('Enter')
   await expect(field).toHaveCount(0)
@@ -306,7 +312,7 @@ test('Escape and an empty name keep the old name', async () => {
   await expect.poll(() => probeText(page, 'claude-1')).toContain('claude ready')
   const field = page.getByRole('textbox', { name: 'Session name' })
   await tab(page, 'Claude').locator('.dv-default-tab-content, .bp-tab-name').first().dblclick()
-  await page.keyboard.press('Control+A')
+  await page.keyboard.press('ControlOrMeta+A')
   await page.keyboard.type('nope')
   await page.keyboard.press('Escape')
   await expect(field).toHaveCount(0)
@@ -314,7 +320,7 @@ test('Escape and an empty name keep the old name', async () => {
   await expect(tab(page, 'nope')).toHaveCount(0)
 
   await tab(page, 'Claude').locator('.dv-default-tab-content, .bp-tab-name').first().dblclick()
-  await page.keyboard.press('Control+A')
+  await page.keyboard.press('ControlOrMeta+A')
   await page.keyboard.press('Backspace')
   await page.keyboard.press('Enter')
   await expect(field).toHaveCount(0)
@@ -345,7 +351,7 @@ test('closing the first Claude tab keeps the saved layout', async () => {
   await expect.poll(() => probeText(first.page, 'claude-1')).toContain('claude ready')
   await openSession(first.page, 'Claude', 'claude-2')
   await rename(first.page, 'Claude 2', 'docs')
-  await closeAction(first.page, 'Claude').click()
+  await clickClose(first.page, 'Claude')
   await expect(tab(first.page, 'Claude')).toHaveCount(0)
   await first.page.waitForTimeout(1000)
   await first.app.close()
@@ -429,7 +435,7 @@ test("a fast double-click on an inactive session's tab opens its name field and 
     .locator('.dv-tab', { hasText: /^\s*⚠?\s*Claude\s*$/ })
     .locator('.dv-default-tab-content')
     .dblclick()
-  await page.keyboard.press('Control+A')
+  await page.keyboard.press('ControlOrMeta+A')
   await page.keyboard.type('fast')
   await page.keyboard.press('Enter')
   await expect(tab(page, 'fast')).toBeVisible()
@@ -453,7 +459,7 @@ test('Escape and Enter during IME composition leave the name field open', async 
 
 test('closing a session puts the keyboard in the tab that takes its place', async () => {
   const { app, page, log } = await twoSessions()
-  await closeAction(page, 'Claude 2').click()
+  await clickClose(page, 'Claude 2')
   await expect(tab(page, 'Claude 2')).toHaveCount(0)
   await expectKeyboardIn(page, 'claude-1')
   await page.keyboard.type('p')
@@ -473,7 +479,7 @@ test("a closed session's notification is closed", async () => {
   await typeInto(page, 'claude-2', 'p?')
   await expect.poll(() => app.evaluate(() => globalThis.shown?.length)).toBe(1)
   await focusClaude(page, 'Claude 2')
-  await closeAction(page, 'Claude 2').click()
+  await clickClose(page, 'Claude 2')
   await page.getByRole('dialog').getByRole('button', { name: 'Close session' }).click()
   await expect(tab(page, 'Claude 2')).toHaveCount(0)
   await expect.poll(() => app.evaluate(() => globalThis.closedNotifications)).toBe(1)

@@ -1,0 +1,6 @@
+#!/bin/sh
+# Opens a Folder in Blueprint from a terminal on macOS: `blueprint <folder>`. Link this script onto your
+# PATH once, for example:
+#   ln -s /Applications/Blueprint.app/Contents/Resources/bin/blueprint ~/.local/bin/blueprint
+here=$(dirname "$(realpath "$0")")
+exec "$here/../../MacOS/Blueprint" "$@"

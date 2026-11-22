@@ -50,7 +50,10 @@ test('a Claude pane shows its column width', async () => {
   const before = await cols()
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(900, 600))
   await expect.poll(cols).toBeLessThan(before)
-  await expect(pane.locator('.bp-dim')).toHaveText(`${await cols()} COL`)
+  // The pane may fit once more after the resize: the label and the terminal agree once it settles.
+  await expect
+    .poll(async () => (await pane.locator('.bp-dim').textContent()) === `${await cols()} COL`)
+    .toBe(true)
   await app.close()
 })
 

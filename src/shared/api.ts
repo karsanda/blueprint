@@ -96,6 +96,8 @@ export type FileDiff =
 export interface BlueprintApi {
   /** True when e2e tests run the app (BLUEPRINT_E2E=1). */
   e2e: boolean
+  /** The operating system Blueprint runs on, as Node names it (`linux`, `darwin`). */
+  platform: string
   getFolder(): Promise<FolderState>
   pickFolder(): Promise<FolderState>
   startTerminal(req: StartRequest): Promise<StartResult>
@@ -110,6 +112,8 @@ export interface BlueprintApi {
   /** Every status signal main learned about any Claude session, with the tab it belongs to. */
   onStatusSignal(cb: (tabId: string, signal: StatusSignal) => void): () => void
   writeClipboard(text: string): void
+  /** The clipboard's text, for pasting where the browser does not (Ctrl+Shift+V on macOS). */
+  readClipboard(): Promise<string>
   /** Asks for a desktop notification that a session needs the Developer. */
   notify(tabId: string, tabTitle: string): void
   /** Main asks to bring a session forward, after the Developer clicked its notification. */

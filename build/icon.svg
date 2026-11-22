@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Blueprint's icon: a drafting sheet holding the default layout. Colours are the Blueprint tokens. -->
+  <defs>
+    <pattern id="grid" width="41.2" height="41.2" patternUnits="userSpaceOnUse" x="100" y="100">
+      <path d="M 41.2 0 L 0 0 0 41.2" fill="none" stroke="#cfe3ff" stroke-opacity="0.12" stroke-width="2"/>
+    </pattern>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="#163b6a"/>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#grid)"/>
+  <g fill="none" stroke="#cfe3ff" stroke-width="16" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="180" y="230" width="664" height="564" rx="18" fill="#0f2c52"/>
+    <path d="M 330 230 V 794"/>
+    <path d="M 330 560 H 844"/>
+    <path d="M 587 230 V 560"/>
+  </g>
+  <rect x="356" y="262" width="96" height="16" rx="4" fill="#ffd166"/>
+  <g fill="none" stroke="#a6d8ff" stroke-width="14" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 362 330 l 30 26 l -30 26"/>
+    <path d="M 362 612 l 30 26 l -30 26"/>
+    <path d="M 618 300 H 800 M 618 350 H 760 M 618 400 H 790"/>
+    <path d="M 214 290 H 296 M 214 340 H 280 M 214 390 H 290"/>
+  </g>
+  <rect x="414" y="334" width="26" height="44" rx="3" fill="#ffd166"/>
+</svg>

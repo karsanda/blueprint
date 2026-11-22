@@ -25,6 +25,8 @@ export interface LaunchOptions {
   home?: string
   /** The Developer's shell (`SHELL`). Defaults to the fake shell. */
   shell?: string
+  /** Variables to set, or with `undefined` to remove, in the app's environment. */
+  env?: Record<string, string | undefined>
 }
 
 const root = resolve(__dirname, '../..')
@@ -38,14 +40,18 @@ function noClaudePath(): string {
 }
 
 /**
- * Tests stay off the Developer's desktop. Chromium's headless display draws every window without
- * showing it (BLUEPRINT_E2E_HEADED=1 shows them, for debugging), and a session bus that doesn't
- * exist keeps desktop notifications from reaching the notification daemon.
+ * Tests stay off the Developer's desktop. On Linux, Chromium's headless display draws every window
+ * without showing it (BLUEPRINT_E2E_HEADED=1 shows them, for debugging); macOS has no such display, so
+ * there the windows show. A session bus that doesn't exist keeps desktop notifications from reaching the
+ * notification daemon.
  */
 const headless =
-  process.env['BLUEPRINT_E2E_HEADED'] === '1'
+  process.env['BLUEPRINT_E2E_HEADED'] === '1' || process.platform !== 'linux'
     ? []
-    : ['--ozone-platform=headless', '--ozone-override-screen-size=1920,1080']
+    : [
+        '--ozone-platform=headless',
+        `--ozone-override-screen-size=${process.env['BLUEPRINT_E2E_SCREEN'] ?? '1920,1080'}`,
+      ]
 const noSessionBus = 'unix:path=/nonexistent/blueprint-e2e-bus'
 
 /** Where a run's temp dirs go: the run directory its global setup made, or the system's. */
@@ -68,9 +74,15 @@ export async function launch(opts: LaunchOptions = {}): Promise<Launched> {
     PATH:
       opts.path === 'no-claude' ? noClaudePath() : `${fixtureBin}${delimiter}${process.env['PATH'] ?? ''}`,
     SHELL: opts.shell ?? join(fixtureBin, 'fake-shell'),
+    // Started as from a terminal, so Blueprint does not read the login shell's environment first.
+    TERM: 'xterm-256color',
     BLUEPRINT_E2E: '1',
     BLUEPRINT_TEST_LOG: log,
     DBUS_SESSION_BUS_ADDRESS: noSessionBus,
+  }
+  for (const [key, value] of Object.entries(opts.env ?? {})) {
+    if (value === undefined) delete env[key]
+    else env[key] = value
   }
   const app = await electron.launch({
     args: [
@@ -138,7 +150,20 @@ export function gitFolder(): string {
   const git = (...args: string[]): void => {
     execFileSync(
       'git',
-      ['-c', 'user.name=t', '-c', 'user.email=t@example.invalid', '-c', 'commit.gpgsign=false', ...args],
+      [
+        '-c',
+        'user.name=t',
+        '-c',
+        'user.email=t@example.invalid',
+        '-c',
+        'commit.gpgsign=false',
+        // No maintenance in the background: its lock file would come and go under a test that compares objects.
+        '-c',
+        'maintenance.auto=false',
+        '-c',
+        'gc.auto=0',
+        ...args,
+      ],
       { cwd: dir, stdio: 'ignore', env },
     )
   }
