@@ -33,7 +33,14 @@ export function foregroundProgram(
     // The group's leader, the first command of a pipeline such as `cat log | less`, may have ended while
     // the rest still runs. Any process left in the group, in the shell's session, is the program.
   }
-  const pids = list()
+  let entries: string[]
+  try {
+    entries = list()
+  } catch {
+    // No /proc to list (as on macOS): nothing can be named.
+    return null
+  }
+  const pids = entries
     .filter((entry) => /^\d+$/.test(entry))
     .map(Number)
     .toSorted((a, b) => a - b)

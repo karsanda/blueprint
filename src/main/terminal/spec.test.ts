@@ -64,7 +64,7 @@ test('claudeSpec explains a missing claude', () => {
 })
 
 test('shellSpec uses $SHELL', () => {
-  expect(shellSpec('/work/proj', { SHELL: '/usr/bin/fish' })).toMatchObject({
+  expect(shellSpec('/work/proj', { SHELL: '/usr/bin/fish' }, 'linux')).toMatchObject({
     file: '/usr/bin/fish',
     args: [],
     cwd: '/work/proj',
