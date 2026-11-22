@@ -21,5 +21,9 @@ declare global {
     reviewStates?: ReviewState[]
     /** Calls a test's wrapper of a pop-out window's focus saw, in popout.spec.ts. */
     focusCalls?: number
+    /** Set on a pop-out page by popout.spec.ts, and gone if that page loads again. */
+    loadedOnce?: boolean
+    /** Set by a script popout.spec.ts injects into a pop-out page, which its policy should block. */
+    injected?: boolean
   }
 }

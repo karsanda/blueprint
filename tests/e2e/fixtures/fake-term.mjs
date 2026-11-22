@@ -106,6 +106,8 @@ const hookKeys = {
   n: () => post('Notification', { notification_type: 'permission_prompt' }),
   t: () => post('PostToolUse'),
   s: () => post('Stop'),
+  // Claude ends its turn on a question in plain text.
+  Q: () => post('Stop', { last_assistant_message: 'I found two configs.\n\nWhich one should I change?' }),
   // Claude writes a file with its Write tool.
   w: () =>
     later(() => {

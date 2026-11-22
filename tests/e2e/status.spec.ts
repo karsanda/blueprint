@@ -1,5 +1,6 @@
-import { existsSync, readFileSync, statSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 import { expect, test } from '@playwright/test'
 import { launch, probeCall, probeText, readLog, typeInto } from './launch'
 
@@ -69,6 +70,18 @@ test('a working session shows as idle when Claude Code finishes its turn', async
   await expect(pane).toHaveAttribute('data-status', 'working')
   await typeInto(page, 'claude-1', 's')
   await expect(pane).toHaveAttribute('data-status', 'idle')
+  await app.close()
+})
+
+test('a session whose turn ends on a question shows Needs you', async () => {
+  const { app, page } = await launch()
+  const pane = page.locator('[data-tab="claude-1"]')
+  await expect.poll(() => probeText(page, 'claude-1')).toContain('claude ready')
+  await typeInto(page, 'claude-1', 'p')
+  await expect(pane).toHaveAttribute('data-status', 'working')
+  await typeInto(page, 'claude-1', 'Q')
+  await expect(pane).toHaveAttribute('data-status', 'needs-you')
+  await expect.poll(() => page.title()).toBe('Needs you: Claude — Blueprint')
   await app.close()
 })
 
@@ -161,5 +174,17 @@ test("moving through a prompt's options keeps Needs you", async () => {
   await expect(pane).toHaveAttribute('data-status', 'needs-you')
   await typeInto(page, 'claude-1', '1')
   await expect(pane).toHaveAttribute('data-status', 'working')
+  await app.close()
+})
+
+test("a Claude session says when Claude Code's settings turn off its hooks", async () => {
+  const home = mkdtempSync(join(process.env.BLUEPRINT_E2E_ROOT ?? tmpdir(), 'blueprint-e2e-home-'))
+  mkdirSync(join(home, '.claude'))
+  writeFileSync(join(home, '.claude', 'settings.json'), JSON.stringify({ disableAllHooks: true }))
+  const { app, page } = await launch({ home })
+  const notice = page.locator('[data-tab="claude-1"]').getByRole('status')
+  await expect(notice).toContainText(`disableAllHooks in ${join(home, '.claude', 'settings.json')}`)
+  await notice.getByRole('button', { name: 'Dismiss' }).click()
+  await expect(notice).toHaveCount(0)
   await app.close()
 })

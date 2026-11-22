@@ -6,7 +6,9 @@ export interface TerminalStatus {
   exit?: ExitInfo
   failure?: StartFailure
   /** A muted line beside a running terminal. */
-  notice?: 'conversation-lost'
+  notice?: 'conversation-lost' | 'held-elsewhere'
+  /** Why Claude Code's settings keep Blueprint's hooks from running: a second muted line. */
+  hooksBlocked?: string
 }
 
 interface StatusStore {

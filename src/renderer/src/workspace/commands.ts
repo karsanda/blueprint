@@ -106,14 +106,25 @@ function groupWithKeyboard(api: DockviewApi, win: Window): DockviewGroupPanel | 
 }
 
 /**
+ * Whether Blueprint's close question or a menu is open in any of its windows. Both are mounted only
+ * while open, so a key acting behind them would change the layout under the Developer's eyes.
+ */
+function overlayOpen(api: DockviewApi): boolean {
+  const windows = [window, ...api.getPopouts().map((p) => p.window)]
+  return windows.some((w) => w?.document.querySelector('[role="dialog"], [role="menu"]'))
+}
+
+/**
  * Listens for workspace keys on the main window and on every pop-out window, whichever element has the
  * keyboard, terminals included. A handled key stops there, in the capture phase, so it never reaches the
- * terminal or its program. Keys typed in a tab's rename field stay in it. Returns the uninstall.
+ * terminal or its program. Keys typed in a tab's rename field stay in it, and no key acts while the close
+ * question or a menu is open. Returns the uninstall.
  */
 export function installKeys(api: DockviewApi): () => void {
   const listen = (win: Window): (() => void) => {
     const onKey = (e: KeyboardEvent): void => {
       if (win.document.activeElement?.classList.contains('bp-tab-name')) return
+      if (overlayOpen(api)) return
       const action = workspaceKeyAction(e)
       if (!action) return
       e.preventDefault()
@@ -123,10 +134,25 @@ export function installKeys(api: DockviewApi): () => void {
     win.addEventListener('keydown', onKey, true)
     return () => win.removeEventListener('keydown', onKey, true)
   }
-  const offs = [listen(window), ...api.getPopouts().map((p) => listen(p.window))]
-  const sub = api.onDidAddPopoutGroup((p) => offs.push(listen(p.window)))
+  // A closed pop-out window's listener goes with it, so the window is not kept alive. dockview names the
+  // window by its pop-out group: by the time it reports the removal, the window itself is already gone.
+  const offMain = listen(window)
+  const offs = new Map<string, () => void>()
+  const add = (id: string, win: Window | null): void => {
+    if (win && !offs.has(id)) offs.set(id, listen(win))
+  }
+  for (const p of api.getPopouts()) add(p.id, p.window)
+  const subs = [
+    api.onDidAddPopoutGroup((p) => add(p.id, p.window)),
+    api.onDidRemovePopoutGroup((p) => {
+      offs.get(p.id)?.()
+      offs.delete(p.id)
+    }),
+  ]
   return () => {
-    sub.dispose()
-    for (const off of offs) off()
+    for (const sub of subs) sub.dispose()
+    offMain()
+    for (const off of offs.values()) off()
+    offs.clear()
   }
 }

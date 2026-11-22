@@ -23,7 +23,7 @@ The Developer learns at once when a Claude session waits for them, even while lo
 
 ## Alternative Flow 1: The window is in front
 
-At step 3, the window is in front. System skips the notification; the marks from step 2 are enough.
+At step 3, a Blueprint window is in front. System skips the notification; the marks from step 2 are enough.
 
 ## Alternative Flow 2: Notifications are turned off
 
@@ -36,6 +36,14 @@ At step 2, more than one session waits. The title bar lists each one, and each t
 ## Alternative Flow 4: The Developer refuses or stops Claude Code
 
 At step 6 or step 8, the Developer refuses the request or stops Claude Code. Claude Code ends its turn early. System marks the session as idle.
+
+## Alternative Flow 5: Claude asks in plain text
+
+At step 1, Claude Code ends its turn on a question in plain text. System marks the session as Needs you, as at step 2.
+
+## Alternative Flow 6: Claude Code's settings turn off its hooks
+
+At step 1, Claude Code's settings keep it from telling System about the session. System says so in the session's pane, naming the setting and its file.
 
 ## Slice 1: Status and notification
 
@@ -58,10 +66,24 @@ Test cases:
 - Given a working session, when Claude Code finishes its turn, then it shows as idle.
 - Given a session mid-turn, when the Developer refuses or stops Claude Code, then it shows as idle.
 
+## Slice 2: Questions and blocked hooks
+
+Covers: Alternative Flow 5, Alternative Flow 6.
+
+Work items:
+
+- [x] Mark Needs you when Claude Code ends its turn on a question ([#16](https://github.com/karsanda/blueprint/issues/16))
+- [x] Say in the pane when Claude Code's settings turn off its hooks ([#15](https://github.com/karsanda/blueprint/issues/15))
+
+Test cases:
+
+- Given a working session, when Claude Code ends its turn on a question, then it shows Needs you.
+- Given settings that turn off hooks, when a Claude session starts, then its pane names the setting and its file.
+
 ## Known gaps
 
-- Claude Code sometimes asks a question in plain text. That ends its turn, so the session shows as idle, not Needs you.
 - Claude Code may first ask the Developer to trust the Folder or to sign in. The session shows as idle meanwhile.
+- System reads Claude Code's settings files only. Settings from a device profile or the organization's server are not checked.
 
 ## Resources
 

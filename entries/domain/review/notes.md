@@ -18,7 +18,8 @@ git add -A -- . ':(exclude,attr:filter=lfs)'
 git write-tree
 ```
 
-- `<store>` is one folder per Folder, inside a folder that belongs to one run of Blueprint: `<user data>/review-<pid>-<random>`. Blueprint removes it on quit, and on start removes any left by a run whose process is gone. So two Blueprints on one Folder never share a store, and an index never outlives its objects: an index whose objects are gone breaks `write-tree`.
+- `<store>` is one folder per Folder. For the Blueprint that holds the Folder (see [Claude sessions](../claude_sessions/notes.md), One Blueprint per Folder) it is `<user data>/review-kept/<folderKey>`, kept across runs so This session survives a reopen (see Kept sessions below). Any other Blueprint uses a folder that belongs to its run: `<user data>/review-<pid>-<random>`. Blueprint removes that one on quit, and on start removes any left by a run whose process is gone. So two Blueprints on one Folder never share a store.
+- An index never outlives its objects: an index whose objects are gone breaks `write-tree`. The kept store keeps its objects but starts each run with a fresh index, since one may name objects the repository has collected since.
 - The repository's objects dir is `git rev-parse --path-format=absolute --git-path objects`, which also works in a linked worktree.
 - `-- .` keeps the snapshot to the Folder when the Folder is a subfolder of a repository.
 - `.gitignore` is respected, and untracked files are included.
@@ -55,13 +56,23 @@ git write-tree
 | `UserPromptSubmit` from the Developer, before replying | turn base | This turn |
 | `PreToolUse` for `Bash`, before replying | before the command | who made a Change |
 | `PostToolUse` or `PostToolUseFailure` for `Bash` | after the command | who made a Change, refresh |
-| Any other `PostToolUse`, `Stop`, the window coming to the front, and every 2 seconds while the Changes pane is visible | now | refresh |
+| Any other `PostToolUse`, `Stop`, any Blueprint window coming to the front, and every 2 seconds while the Changes pane is visible | now | refresh |
 
 - The status signal goes out when the hook arrives. Only the reply waits for the snapshot.
 - Claude Code waits for the reply to `UserPromptSubmit` and `PreToolUse` hooks, up to the hook's timeout. Holding the reply until the snapshot is written puts the base before Claude's first edit. These two hooks get a 10-second timeout, and Blueprint holds the reply at most 8 seconds. Past their timeout, Claude Code goes on silently.
 - Claude Code also fires `UserPromptSubmit` for its own messages: `<task-notification>` when a background command ends, and `<agent-message from="…">` when a subagent hands back. A prompt that begins with either does not start a turn: This turn stays on the Developer's last prompt. It still marks the session Working. The format is not documented: Blueprint relies only on these two openings.
 - A refresh that finds a snapshot already running skips. While the shown range's base is read, a refresh says so at once instead.
 - Review state belongs to one Claude start of a tab, keyed by its start key like the hooks: the session base, the turn base and the touched paths. Restarting the tab replaces it. `/clear` keeps it, although Claude Code's `session_id` changes.
+
+### Kept sessions
+
+This session survives a reopen ([#27](https://github.com/karsanda/blueprint/issues/27)), for the Blueprint that holds the Folder.
+
+- Each conversation gets a record `<kept store>/sessions/<session id>.json`: the session base's tree and every path the session touched since its start. The id must be a session id (a UUID), so it never names another file.
+- The record is written when the base lands, at each touch, and at a prompt that names a new session id. It follows the conversation the tab saves: after `/clear` it moves to the new id at the next prompt, as the tab's saved conversation does.
+- A tab that resumes a conversation gets its record back: the old base, and its touched paths credited to the tab again. This turn starts over: it says there is no prompt yet. A record whose base tree is gone from the store is ignored, and a new base is taken.
+- Closing a tab drops its record, and so does a start that does not continue the tab's conversation, such as Restart. Records untouched for 30 days are dropped when the Folder opens. When none is left, the whole kept store goes, so it starts afresh instead of growing.
+- Known gap: while a conversation stays open for weeks, the kept store keeps every snapshot's new objects.
 
 ### Why not a file watcher
 

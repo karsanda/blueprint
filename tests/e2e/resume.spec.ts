@@ -188,3 +188,57 @@ test('a session that failed to start resumes its conversation on Restart', async
     await second.app.close()
   }
 })
+
+const ELSEWHERE = 'This Folder is open in another Blueprint window, so a new conversation started.'
+
+test('a second window on an open Folder starts a new conversation and says why', async () => {
+  const first = await launch()
+  await prompt(first.page, first.log, 'claude-1', 'claude')
+  // The first window saves the conversation with its layout.
+  await first.page.waitForTimeout(1000)
+  const second = await relaunch(first)
+  try {
+    await expect(second.page.getByRole('status').filter({ hasText: ELSEWHERE })).toBeVisible()
+    const args = await startArgs(second.log, 'claude')
+    expect(args).toContain('--session-id')
+    expect(args).not.toContain('--resume')
+  } finally {
+    await second.app.close()
+    await first.app.close()
+  }
+})
+
+test('a second window on an open Folder leaves its layout file alone', async () => {
+  const first = await launch()
+  await prompt(first.page, first.log, 'claude-1', 'claude')
+  await first.page.waitForTimeout(1000)
+  const userData = await first.app.evaluate(({ app }) => app.getPath('userData'))
+  const file = layoutFile(userData, first.folder)
+  const saved = readFileSync(file, 'utf8')
+  const second = await relaunch(first)
+  try {
+    await openSecondSession(second.page, 'claude-2')
+    await second.page.waitForTimeout(1000)
+  } finally {
+    await second.app.close()
+  }
+  expect(readFileSync(file, 'utf8')).toBe(saved)
+  await first.app.close()
+})
+
+test('the Folder resumes again once the window that held it closes', async () => {
+  const first = await launch()
+  await prompt(first.page, first.log, 'claude-1', 'claude')
+  const id = sessionOf(first.log, 'claude')
+  await first.page.waitForTimeout(1000)
+  const second = await relaunch(first)
+  await expect.poll(() => probeText(second.page, 'claude-1')).toContain('claude ready')
+  await second.app.close()
+  await close(first)
+  const third = await relaunch(first)
+  try {
+    await expect.poll(() => probeText(third.page, 'claude-1')).toContain(`resumed ${id}`)
+  } finally {
+    await third.app.close()
+  }
+})

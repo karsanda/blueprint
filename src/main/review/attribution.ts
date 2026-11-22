@@ -41,6 +41,14 @@ export class TouchLog {
     return this.seq
   }
 
+  /** The paths the tab touched after `since`, in the order of its latest touch of each. */
+  pathsBy(tabId: string, since: number): string[] {
+    return [...(this.lastByTab.get(tabId) ?? [])]
+      .filter(([, seq]) => seq > since)
+      .toSorted((a, b) => a[1] - b[1])
+      .map(([path]) => path)
+  }
+
   /** The tabs that touched the path after `since`, in first-touch order. */
   by(path: string, since: number): string[] {
     const tabs: string[] = []

@@ -1,4 +1,4 @@
-import { type BrowserWindow, Notification } from 'electron'
+import { BrowserWindow, Notification } from 'electron'
 
 /** Tells the Developer, from the desktop, that a Claude session needs them, and takes them back to it. */
 export class NeedsYouNotifier {
@@ -11,8 +11,9 @@ export class NeedsYouNotifier {
     private readonly focusTab: (tabId: string) => void,
   ) {}
 
+  /** Shows nothing while any Blueprint window is in front: a pop-out window counts as much as the main one. */
   notify(tabId: string, tabTitle: string): void {
-    if (this.win.isFocused() || !Notification.isSupported()) return
+    if (BrowserWindow.getFocusedWindow() !== null || !Notification.isSupported()) return
     const notification = new Notification({
       title: `Needs you: ${tabTitle}`,
       body: `Claude Code is waiting for your answer in ${this.folderName()}.`,

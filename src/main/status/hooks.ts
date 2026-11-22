@@ -13,6 +13,8 @@ export interface HookInput {
   tool_name?: string
   tool_use_id?: string
   file_path?: string
+  /** On `Stop`: the text of Claude's final response. */
+  last_assistant_message?: string
 }
 
 export const HOOK_EVENTS = [
@@ -85,6 +87,16 @@ export function writeHookSettings(dir: string, startKey: string, settings: objec
   return file
 }
 
+/**
+ * Whether Claude's final response ends on a question: its last line, past any closing marks of Markdown or
+ * quotes, ends in a question mark. Claude Code then waits for the Developer's answer, but no hook says so.
+ */
+export function endsOnQuestion(message: string | undefined): boolean {
+  if (!message) return false
+  const last = message.trimEnd().split('\n').at(-1) ?? ''
+  return /[?？][*_`)\]"'”’»]*$/.test(last.trimEnd())
+}
+
 /** What a hook event tells Blueprint about the session's status, or null when it tells nothing. */
 export function signalFromHook(e: HookInput): StatusSignal | null {
   switch (e.hook_event_name) {
@@ -99,7 +111,7 @@ export function signalFromHook(e: HookInput): StatusSignal | null {
     case 'PostToolUse':
       return { kind: 'tool-done' }
     case 'Stop':
-      return { kind: 'stop' }
+      return endsOnQuestion(e.last_assistant_message) ? { kind: 'asks' } : { kind: 'stop' }
     default:
       return null
   }

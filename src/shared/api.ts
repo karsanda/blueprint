@@ -27,7 +27,16 @@ export interface StartRequest {
 }
 
 export type StartResult =
-  | { ok: true; pid: number; /** Present only when the request had `resume`. */ resumed?: boolean }
+  | {
+      ok: true
+      pid: number
+      /** Present only when the request had `resume`. */
+      resumed?: boolean
+      /** True when the conversation was not resumed because another Blueprint holds the Folder. */
+      heldElsewhere?: boolean
+      /** For Claude: why Claude Code's settings keep Blueprint's hooks from running, when they do. */
+      hooksBlocked?: string
+    }
   | { ok: false; failure: StartFailure }
 
 /** How a terminal's program ended. `signal` is present only when a signal ended it. */

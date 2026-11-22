@@ -128,13 +128,17 @@ interface Rig {
 interface RigOptions {
   start?: boolean
   repo?: string
+  /** The dir that keeps sessions across runs, as for the Blueprint that holds the Folder. */
+  kept?: string
+  /** The conversation the first session resumes. */
+  resume?: string
   git?: string
   waitMs?: number
   timeoutMs?: number
   openTimeoutMs?: number
 }
 
-async function rig({ start, repo: given, ...opts }: RigOptions = {}): Promise<Rig> {
+async function rig({ start, repo: given, kept, resume, ...opts }: RigOptions = {}): Promise<Rig> {
   const repo = given ?? makeRepo()
   const states: ReviewState[] = []
   const overlaps: Overlap[][] = []
@@ -148,8 +152,8 @@ async function rig({ start, repo: given, ...opts }: RigOptions = {}): Promise<Ri
     },
   )
   services.push(svc)
-  await svc.setFolder(repo)
-  if (start !== false) await svc.startSession('claude-1', KEY)
+  await svc.setFolder(repo, kept)
+  if (start !== false) await svc.startSession('claude-1', KEY, resume)
   const write = (name: string, text = 'x\n') => writeFileSync(join(repo, name), text)
   return {
     repo,
@@ -636,5 +640,84 @@ describe('ReviewService', () => {
     const second = r.states.length
     r.svc.setView(view)
     await vi.waitFor(() => expect(r.states.length).toBeGreaterThan(second))
+  })
+})
+
+describe('ReviewService across a reopen', () => {
+  const ID1 = '674b2b9c-5835-491b-807f-a5479090089a'
+  const ID2 = '0f1e2d3c-4b5a-4968-8776-655443322110'
+
+  /** One run of Blueprint that holds the Folder: its session talks in conversation ID1 and writes b.txt. */
+  async function firstRun(kept: string): Promise<Rig> {
+    const r = await rig({ kept })
+    await r.svc.hook(KEY, prompt({ session_id: ID1 }))
+    await r.claudeWrites('b.txt')
+    return r
+  }
+
+  it("a resumed session lists This session's Changes from before the reopen, still Claude's", async () => {
+    const kept = temp('bp-kept-')
+    const first = await firstRun(kept)
+    first.svc.close()
+    first.write('c.txt')
+    const second = await rig({ repo: first.repo, kept, resume: ID1 })
+    expect(
+      await second.listed('session', [
+        ['b.txt', ['claude-1']],
+        ['c.txt', []],
+      ]),
+    ).toEqual([
+      ['b.txt', ['claude-1']],
+      ['c.txt', []],
+    ])
+    expect(second.last()).not.toEqual(NO_PROMPT)
+    second.svc.setView({ range: 'turn', visible: false, tabId: null })
+    await vi.waitFor(() => expect(second.last()).toEqual(NO_PROMPT))
+  })
+
+  it('after /clear, the newer conversation keeps the session', async () => {
+    const kept = temp('bp-kept-')
+    const first = await firstRun(kept)
+    await first.svc.hook(KEY, prompt({ session_id: ID2 }))
+    await first.claudeWrites('d.txt')
+    first.svc.close()
+    const second = await rig({ repo: first.repo, kept, resume: ID2 })
+    expect(
+      await second.listed('session', [
+        ['b.txt', ['claude-1']],
+        ['d.txt', ['claude-1']],
+      ]),
+    ).toEqual([
+      ['b.txt', ['claude-1']],
+      ['d.txt', ['claude-1']],
+    ])
+  })
+
+  it('a closed tab keeps nothing for the next run', async () => {
+    const kept = temp('bp-kept-')
+    const first = await firstRun(kept)
+    first.svc.endSession('claude-1')
+    first.svc.close()
+    const second = await rig({ repo: first.repo, kept, resume: ID1 })
+    expect(await second.listed('session', [])).toEqual([])
+  })
+
+  it('a restart with a new conversation keeps nothing of the old one', async () => {
+    const kept = temp('bp-kept-')
+    const first = await firstRun(kept)
+    await first.svc.startSession('claude-1', 'k2')
+    first.svc.close()
+    const second = await rig({ repo: first.repo, kept, resume: ID1 })
+    expect(await second.listed('session', [])).toEqual([])
+  })
+
+  it('a Blueprint that does not hold the Folder keeps nothing', async () => {
+    const first = await rig()
+    await first.svc.hook(KEY, prompt({ session_id: ID1 }))
+    await first.claudeWrites('b.txt')
+    first.svc.close()
+    const kept = temp('bp-kept-')
+    const second = await rig({ repo: first.repo, kept, resume: ID1 })
+    expect(await second.listed('session', [])).toEqual([])
   })
 })

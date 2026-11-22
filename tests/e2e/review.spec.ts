@@ -283,3 +283,24 @@ test('a new file and a deleted file show whole, and a binary file says so', asyn
   await pick(page, 'image.bin')
   await expect(page.locator('[data-tab="difference"]')).toContainText('Binary file.')
 })
+
+test('This session keeps its Changes across a reopen', async () => {
+  const folder = gitFolder()
+  const first = await launch({ folder })
+  await readyClaude(first.page)
+  await typeInto(first.page, 'claude-1', 'pw')
+  await expect.poll(() => rowPaths(first.page)).toEqual(['claude-1.txt'])
+  // The tab saves its conversation with the layout before Blueprint closes.
+  await first.page.waitForTimeout(1000)
+  await first.app.close()
+  const second = await launch({ folder, home: first.home })
+  try {
+    await readyClaude(second.page)
+    await expect.poll(() => probeText(second.page, 'claude-1')).toContain('resumed')
+    await second.page.getByRole('button', { name: 'This session' }).click()
+    await expect.poll(() => rowPaths(second.page)).toEqual(['claude-1.txt'])
+    await expect(second.page.locator('[data-tab="changes"] [data-path="claude-1.txt"]')).toContainText('●')
+  } finally {
+    await second.app.close()
+  }
+})

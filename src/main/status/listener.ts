@@ -27,6 +27,7 @@ function parseHookInput(body: string): HookInput | null {
       prompt,
       tool_name,
       tool_use_id,
+      last_assistant_message,
     } = value
     if (typeof hook_event_name !== 'string' || typeof session_id !== 'string') return null
     const input = isRecord(value['tool_input']) ? value['tool_input'] : {}
@@ -45,6 +46,7 @@ function parseHookInput(body: string): HookInput | null {
       ...(typeof tool_name === 'string' && { tool_name }),
       ...(typeof tool_use_id === 'string' && { tool_use_id }),
       ...(file_path !== undefined && { file_path }),
+      ...(typeof last_assistant_message === 'string' && { last_assistant_message }),
     }
   } catch {
     return null

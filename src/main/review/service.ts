@@ -5,6 +5,7 @@ import type { Change, FileDiff, Overlap, ReviewState, ReviewView } from '../../s
 import type { HookInput } from '../status/hooks'
 import { isClaudeCodesOwnPrompt, pathInFolder, TouchLog } from './attribution'
 import { GitTimeout, SnapshotStore, type GitProblem } from './git'
+import { forgetKept, type KeptSession, pruneKept, readKept, writeKept } from './kept'
 
 const NO_GIT_MESSAGES: Record<GitProblem, string> = {
   'no-git': 'Review needs Git, and Git is not installed.',
@@ -63,6 +64,8 @@ interface Session {
   prompted: number
   /** Snapshots taken before each Bash command, by tool_use_id. They may still be running. */
   before: Map<string, Promise<string>>
+  /** The conversation the tab is in, which a reopen resumes. `/clear` changes it at the next prompt. */
+  conversation?: string
 }
 
 /** Keeps each Claude session's review: the snapshots it compares with, who made each Change, and the state to show. */
@@ -78,6 +81,11 @@ export class ReviewService {
   private unopened = false
   private reopening = false
   private folder: string | null = null
+  /**
+   * The dir that keeps this Folder's review across runs, when this Blueprint holds the Folder. Each
+   * conversation's session base and touched paths are kept there, so This session survives a reopen.
+   */
+  private keptDir: string | undefined
   /** The Folder's real path. Claude Code names files under it. */
   private folderReal: string | undefined
   private opening: Promise<void> = Promise.resolve()
@@ -113,18 +121,22 @@ export class ReviewService {
     this.openTimeoutMs = opts.openTimeoutMs
   }
 
-  /** Opens the review store of the Folder. The first snapshot runs after it, in the background. */
-  setFolder(folder: string | null): Promise<void> {
-    const open = this.opening.then(() => this.open(folder))
+  /**
+   * Opens the review store of the Folder. The first snapshot runs after it, in the background. `keptDir`
+   * is given only to the Blueprint that holds the Folder: its sessions are kept there across runs.
+   */
+  setFolder(folder: string | null, keptDir?: string): Promise<void> {
+    const open = this.opening.then(() => this.open(folder, keptDir))
     this.opening = open
     return open
   }
 
-  private async open(folder: string | null): Promise<void> {
+  private async open(folder: string | null, keptDir: string | undefined): Promise<void> {
     this.folderEpoch++
     // A refresh still running for the earlier Folder sends nothing.
     this.generation++
     this.folder = folder
+    this.keptDir = folder === null ? undefined : keptDir
     this.folderReal = folder === null ? undefined : realPath(folder)
     this.store = undefined
     this.problem = undefined
@@ -147,11 +159,14 @@ export class ReviewService {
     const folder = this.folder
     if (folder === null) return
     try {
+      const kept = this.keptDir
+      if (kept) pruneKept(kept, Date.now())
       const hash = createHash('sha256').update(folder).digest('hex').slice(0, 16)
-      const opened = await SnapshotStore.open(folder, join(this.runDir, hash), {
+      const opened = await SnapshotStore.open(folder, kept ?? join(this.runDir, hash), {
         git: this.git,
         timeoutMs: this.timeoutMs,
         openTimeoutMs: this.openTimeoutMs,
+        keep: kept !== undefined,
       })
       this.unopened = false
       if (opened instanceof SnapshotStore) this.store = opened
@@ -182,32 +197,49 @@ export class ReviewService {
     })
   }
 
-  async startSession(tabId: string, startKey: string): Promise<void> {
+  /** `resume` is the conversation the start resumes: its session goes on where the last run left it. */
+  async startSession(tabId: string, startKey: string, resume?: string): Promise<void> {
     // The session base comes before Claude's first edit, unless Git takes longer than the wait.
-    await this.hold(this.begin(tabId, startKey), 'take the session base', true)
+    await this.hold(this.begin(tabId, startKey, resume), 'take the session base', true)
     // The refresh need not hold Claude back. It runs even while the base is still read, to show the session.
     this.background(() => this.refresh(true))
   }
 
-  /** Registers the session once the Folder is open, and takes its base. Settles when the base does. */
-  private async begin(tabId: string, startKey: string): Promise<unknown> {
+  /**
+   * Registers the session once the Folder is open, and takes its base. A resumed conversation that was kept
+   * gets its base and its touched paths back instead. Settles when the base does.
+   */
+  private async begin(tabId: string, startKey: string, resume?: string): Promise<unknown> {
     let opening: Promise<void>
+    let kept: KeptSession | undefined
     do {
       opening = this.opening
       await opening
+      kept = resume === undefined ? undefined : await this.takeKept(resume)
     } while (opening !== this.opening)
     for (const [key, session] of this.sessions) {
-      if (session.tabId === tabId) this.sessions.delete(key)
+      if (session.tabId !== tabId) continue
+      // A start that does not go on with the tab's conversation ends it for good.
+      if (session.conversation !== undefined && session.conversation !== resume)
+        this.forget(session.conversation)
+      this.sessions.delete(key)
     }
+    const start = this.log.mark()
+    if (kept) this.log.touchAll(kept.touched, tabId)
     // Registered at once, so its hooks count while the base is read.
     const session: Session = {
       tabId,
-      base: this.takeBase(),
-      start: this.log.mark(),
+      base: kept ? { tree: kept.base, failed: false, done: Promise.resolve() } : this.takeBase(),
+      start,
       prompted: this.log.mark(),
       before: new Map(),
+      conversation: resume,
     }
     this.sessions.set(startKey, session)
+    session.base?.done.then(
+      () => this.persist(session),
+      () => undefined,
+    )
     this.shownKey = startKey
     this.sendOverlapsIfChanged()
     // The header and the list both follow the view's tab, which now has its session.
@@ -223,6 +255,12 @@ export class ReviewService {
       const store = this.store
       const folderReal = this.folderReal
       if (e.hook_event_name === 'UserPromptSubmit') {
+        // The tab saves the conversation it is in at a prompt, so the kept session follows it there.
+        if (e.session_id && session.conversation !== e.session_id) {
+          if (session.conversation !== undefined) this.forget(session.conversation)
+          session.conversation = e.session_id
+          this.persist(session)
+        }
         if (e.prompt !== undefined && isClaudeCodesOwnPrompt(e.prompt)) return
         // The turn starts now: what Claude touches while its base is read belongs to it. A base that lands
         // after a newer prompt is dropped with this one.
@@ -256,6 +294,7 @@ export class ReviewService {
                 changes.map((c) => c.path),
                 session.tabId,
               )
+              this.persistTab(session.tabId)
               this.sendOverlapsIfChanged()
             }
           } finally {
@@ -270,10 +309,12 @@ export class ReviewService {
     }
   }
 
-  /** Drops the tab's session. Its touches stay in the log. */
+  /** Drops the tab's session. Its touches stay in the log; nothing of it is kept for a reopen. */
   endSession(tabId: string): void {
     for (const [key, session] of this.sessions) {
-      if (session.tabId === tabId) this.sessions.delete(key)
+      if (session.tabId !== tabId) continue
+      if (session.conversation !== undefined) this.forget(session.conversation)
+      this.sessions.delete(key)
     }
     if (this.shownKey !== undefined && !this.sessions.has(this.shownKey)) {
       this.shownKey = [...this.sessions.keys()].pop()
@@ -284,7 +325,47 @@ export class ReviewService {
 
   private touch(path: string, tabId: string): void {
     this.log.touch(path, tabId)
+    this.persistTab(tabId)
     this.sendOverlapsIfChanged()
+  }
+
+  /** The kept session of a resumed conversation, when its base is still in the store. */
+  private async takeKept(id: string): Promise<KeptSession | undefined> {
+    const kept = this.keptDir === undefined ? undefined : readKept(this.keptDir, id)
+    if (!kept || !this.store) return undefined
+    try {
+      return (await this.store.has(kept.base)) ? kept : undefined
+    } catch {
+      return undefined
+    }
+  }
+
+  /** Keeps the session for a reopen: its base and every path it touched. Only a live session is kept. */
+  private persist(session: Session): void {
+    const tree = session.base?.tree
+    if (!this.keptDir || session.conversation === undefined || tree === undefined) return
+    if (![...this.sessions.values()].includes(session)) return
+    try {
+      writeKept(this.keptDir, session.conversation, {
+        base: tree,
+        touched: this.log.pathsBy(session.tabId, session.start),
+      })
+    } catch (error) {
+      this.warn('keep a session for a reopen', error)
+    }
+  }
+
+  private persistTab(tabId: string): void {
+    for (const session of this.sessions.values()) if (session.tabId === tabId) this.persist(session)
+  }
+
+  private forget(conversation: string): void {
+    if (!this.keptDir) return
+    try {
+      forgetKept(this.keptDir, conversation)
+    } catch (error) {
+      this.warn('forget a kept session', error)
+    }
   }
 
   private sendOverlapsIfChanged(): void {

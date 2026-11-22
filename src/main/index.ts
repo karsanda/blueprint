@@ -9,10 +9,12 @@ import { loginEnvironment, mergeEnvironment, needsLoginEnvironment } from './env
 import { resolveFolder } from './folder'
 import { macMenuTemplate } from './menu'
 import { type IpcDeps, registerIpc } from './ipc'
+import { holdFolder, lockFile, releaseFolder } from './layout/lock'
 import { initialWindow, layoutFile, readLayout, writeLayout } from './layout/store'
 import { isPopoutUrl, rendererFile } from './protocol'
 import { NeedsYouNotifier } from './notify'
 import { createReviewDir } from './review/git'
+import { keptReviewDir } from './review/kept'
 import { ReviewService } from './review/service'
 import { createHookDir, hookSettings, writeHookSettings } from './status/hooks'
 import { type HookListener, startHookListener } from './status/listener'
@@ -43,14 +45,19 @@ function createWindow(start: ReturnType<typeof initialWindow>): BrowserWindow {
   })
   // The only window Blueprint opens is a pane's pop-out page, guarded like the main window.
   guardWindow(win.webContents, (url) => isPopoutUrl(url, win.webContents.getURL()))
-  // A pop-out window loads its own page, and nothing after it.
-  win.webContents.on('did-create-window', (child, { url: page }) =>
+  // A pop-out window loads its own page once, and nothing after it.
+  win.webContents.on('did-create-window', (child, { url: page }) => {
+    let loaded = false
     guardWindow(
       child.webContents,
       () => false,
-      (url) => url === page,
-    ),
-  )
+      (url) => {
+        if (loaded || url !== page) return false
+        loaded = true
+        return true
+      },
+    )
+  })
   if (!app.isPackaged) {
     win.webContents.on('before-input-event', (event, input) => {
       if (input.type === 'keyDown' && input.key === 'F12') {
@@ -126,6 +133,9 @@ void app.whenReady().then(async () => {
     if (login) process.env = mergeEnvironment(process.env, login)
   }
   const folder = resolveFolder(process.argv, { packaged: app.isPackaged, cwd: process.cwd() })
+  // Another Blueprint that opened the Folder first keeps its conversations, its review and its layout file.
+  const userData = app.getPath('userData')
+  const holdsFolder = folder.folder ? holdFolder(userData, folder.folder) : false
   // The window is created after the listener and settings file exist, so every handler is
   // there before the renderer loads.
   let win: BrowserWindow | undefined
@@ -142,7 +152,7 @@ void app.whenReady().then(async () => {
   let listener: HookListener | undefined
   let hookDir: ReturnType<typeof createHookDir> | undefined
   try {
-    reviewDir = createReviewDir(app.getPath('userData'))
+    reviewDir = createReviewDir(userData)
     review = new ReviewService(
       reviewDir.dir,
       (state) => send('review:update', state),
@@ -150,7 +160,10 @@ void app.whenReady().then(async () => {
     )
     // Waits only for the review store to open, at most 8 seconds. The first snapshot runs in the background,
     // so a slow Git does not hold back the window.
-    await review.setFolder(folder.folder)
+    await review.setFolder(
+      folder.folder,
+      folder.folder && holdsFolder ? keptReviewDir(userData, folder.folder) : undefined,
+    )
     listener = await startHookListener((startKey, e) => {
       // The status goes out first: the review may hold the reply while it takes a snapshot.
       relay.hook(startKey, e)
@@ -167,9 +180,7 @@ void app.whenReady().then(async () => {
     app.quit()
     return
   }
-  const saved = folder.folder
-    ? readLayout(layoutFile(app.getPath('userData'), folder.folder))?.window
-    : undefined
+  const saved = folder.folder ? readLayout(layoutFile(userData, folder.folder))?.window : undefined
   win = createWindow(
     initialWindow(
       saved,
@@ -182,6 +193,7 @@ void app.whenReady().then(async () => {
   })
   const deps: IpcDeps = {
     folder,
+    holdsFolder,
     manager,
     relay,
     sendConversation: (tabId, conversation) => send('claude:conversation', tabId, conversation),
@@ -193,17 +205,22 @@ void app.whenReady().then(async () => {
       (tabId) => send('status:focus', tabId),
     ),
     hookSettingsFor: (startKey) =>
-      writeHookSettings(hookDir.dir, startKey, hookSettings(`${listener.url}/${startKey}`, listener.token)),
+      writeHookSettings(hookDir.dir, startKey, hookSettings(deps.hookUrlFor(startKey), listener.token)),
+    hookUrlFor: (startKey) => `${listener.url}/${startKey}`,
   }
-  registerIpc(win, deps, app.getPath('userData'))
-  keepWindowBounds(win, () => deps.folder.folder, app.getPath('userData'))
-  win.on('focus', () => void review.refresh())
+  registerIpc(win, deps, userData)
+  // Bounds go with the layout: only the Blueprint that holds the Folder saves them.
+  keepWindowBounds(win, () => (deps.holdsFolder ? deps.folder.folder : null), userData)
+  // Any Blueprint window coming to the front refreshes the review: a pop-out may hold the Changes pane.
+  app.on('browser-window-focus', () => void review.refresh())
   // Both events fire on quit, so the cleanup runs once.
   let cleaned = false
   const cleanUp = (): void => {
     manager.killAll()
     if (cleaned) return
     cleaned = true
+    if (deps.folder.folder && deps.holdsFolder)
+      releaseFolder(lockFile(userData, deps.folder.folder), process.pid)
     void listener.close()
     relay.close()
     hookDir.remove()
