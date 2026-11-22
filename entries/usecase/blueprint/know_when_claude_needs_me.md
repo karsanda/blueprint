@@ -84,6 +84,7 @@ Test cases:
 
 - Claude Code may first ask the Developer to trust the Folder or to sign in. The session shows as idle meanwhile.
 - System reads Claude Code's settings files only. Settings from a device profile or the organization's server are not checked.
+- When an MCP server asks the Developer for input, Needs you shows about 6 seconds after the question appears.
 
 ## Resources
 

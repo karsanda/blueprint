@@ -145,5 +145,7 @@ Checked on 2026-11-21 with the built app and Claude Code 2.1.330, in manual mode
 
 ## Open checks
 
-- The store's trees can point at objects that live only in the repository. If the Developer's `git gc` prunes one during a session, a diff fails. Untested.
-- Clean filters run on each snapshot, from any attributes file: `.gitattributes`, `.git/info/attributes` or a global one. One that writes into the repository would write there on every snapshot. Git LFS's is the only such filter known, and it is left out. Untested with others.
+None left. The two below were checked on 2026-11-22 against the review service and real git ([#28](https://github.com/karsanda/blueprint/issues/28)).
+
+- **`git gc`: a known gap.** The store's trees can name objects that live only in the repository. In the check, a file's content had been staged, then unstaged, so the repository held it as a dangling blob. A snapshot named that blob without writing it into the store. `git gc --prune=now` removed it. From then on every refresh failed with `unable to read <blob>`. Changes said Git could not read the Folder, and that range never recovered. It needs a file that matches a dangling blob, and a prune during the session. Follow-up: [#52](https://github.com/karsanda/blueprint/issues/52).
+- **Clean filters run less often than every snapshot.** A filter in any attributes file (`.gitattributes`, `.git/info/attributes` or a global one) ran for every file in a run's first snapshots, since each run starts a fresh index. It also ran for files changed within the same second as a snapshot, which git cannot trust by their time stamps. After that, it ran only for files that changed. With five files: 30 runs by the session's start, 5 more over three refreshes, then 2 for the one file edited. So a filter that writes into the repository writes once per file per run, then per changed file. Git LFS's is the only such filter known, and it is left out.

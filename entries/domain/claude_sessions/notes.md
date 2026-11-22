@@ -129,7 +129,18 @@ Checked on 2026-11-21 with a real session whose hooks logged every event:
 
 Claude Code sometimes asks the Developer in plain text and ends its turn ([#16](https://github.com/karsanda/blueprint/issues/16)). No hook says it waits, but `Stop` carries `last_assistant_message`, the text of Claude's final response (Claude Code's hooks reference). When its last line ends in a question mark, past closing Markdown or quote marks such as `**`, `)` or `”`, the session shows Needs you instead of idle, with the desktop notification. A question earlier in the text, followed by a statement, does not count.
 
+Checked with the real Claude Code 2.1.330 on 2026-11-22 (`claude -p` on Haiku): asked to reply with one question, its `Stop` carried `"last_assistant_message": "Which colour do you prefer?"`.
+
 Not covered: the folder-trust question and the sign-in. Claude Code holds back every hook until the Developer accepts the trust question, and no hook or signal reports either one.
+
+### An MCP server asking for input
+
+Checked with the real Claude Code 2.1.330 on 2026-11-22 ([#17](https://github.com/karsanda/blueprint/issues/17)): interactive, in a pseudo-terminal, on Haiku, with an MCP server whose tool asks "Which colour do you prefer?" through `elicitation/create`. The tool was allowed beforehand.
+
+- The dialog showed 4.1 s after the start. `PreToolUse` for the tool arrived at the same moment, then nothing until `Notification` with type `elicitation_dialog` and message "Claude Code needs your input", at 10.1 s. So Needs you shows about 6 seconds after the dialog. No hook arrives sooner that only a question would send.
+- No `PermissionRequest` fired for the question. A tool not allowed yet asks permission first, which shows Needs you as any permission prompt does.
+- Esc cancelled the dialog. `Notification` with type `elicitation_response` (`Elicitation response for server "ask": cancel`) followed, then `PostToolUse` and `Stop`. The Developer's key already moves the session off Needs you (see Rules).
+- Claude Code's hooks reference lists more notification types, two of which may also mean the session waits: `elicitation_url_dialog` and `agent_needs_input`. Blueprint ignores them; to check: [#53](https://github.com/karsanda/blueprint/issues/53).
 
 ### Blocked hooks
 
@@ -139,7 +150,12 @@ Some of Claude Code's settings keep Blueprint's hooks from running ([#15](https:
 - `disableAllHooks`: the value of the strongest scope that sets it counts, in the order managed, `.claude/settings.local.json`, `.claude/settings.json`, then the user's `settings.json`. Within managed settings a later drop-in wins. A project's `false` overrides the user's `true`.
 - `allowedHttpHookUrls`: lists from every file merge. When any file sets it, a hook runs only if its URL matches one pattern, where `*` stands for any text.
 - Files: `/etc/claude-code/managed-settings.json` on Linux and `/Library/Application Support/ClaudeCode/managed-settings.json` on macOS, each followed by the `*.json` files of `managed-settings.d` beside it, in name order, hidden ones left out. The user's file is in `$CLAUDE_CONFIG_DIR`, or else `~/.claude`.
-- Known gap: settings from a macOS configuration profile or from the organization's server cannot be read, so they are not checked. Whether `disableAllHooks` reaches hooks given with `--settings` is not documented; Blueprint assumes it does.
+- Known gap: settings from a macOS configuration profile or from the organization's server cannot be read, so they are not checked.
+- Checked with the real Claude Code 2.1.330 on 2026-11-22 (`claude -p` on Haiku, with HTTP hooks given with `--settings`, as Blueprint gives them):
+  - a Folder's `.claude/settings.json` with `"disableAllHooks": true`: no hook arrived. The same run in a plain Folder got `UserPromptSubmit` and `Stop`;
+  - a Folder's `.claude/settings.local.json` with `"allowedHttpHookUrls": ["https://hooks.example.com/*"]`: no hook arrived;
+  - with `["http://127.0.0.1:*"]` instead: both hooks arrived. Blueprint's own reading gives the same verdicts.
+  - `allowManagedHooksOnly` was not checked: it needs a managed settings file, which only an administrator writes.
 
 ### Rules
 
@@ -175,6 +191,5 @@ Drafted, not built: detail for [Give a session its own working copy](../../useca
 ## Open checks
 
 - A real desktop notification on GNOME, and clicking it to focus the session, is not yet verified by hand.
-- Whether `disableAllHooks`, `allowManagedHooksOnly` and `allowedHttpHookUrls` stop hooks given with `--settings`, as Blueprint assumes (see Blocked hooks), is not yet checked against real Claude Code.
-- `elicitation_dialog` (an MCP server asking for input) is untested. It may fire `PermissionRequest` too.
+- A notification click raising the pop-out window that holds the session ([#44](https://github.com/karsanda/blueprint/issues/44)), and two windows on one Folder with the real Claude Code (see One Blueprint per Folder), are not yet checked by hand.
 - The merge check used a folder's settings, not the Developer's `~/.claude/settings.json`. Both go through the same merge, so it should hold. The real-app check used a folder's settings again.
