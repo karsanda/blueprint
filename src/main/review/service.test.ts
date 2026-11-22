@@ -737,9 +737,10 @@ describe('ReviewService across a reopen', () => {
     const first = await firstRun(kept)
     first.svc.endSession('claude-1')
     first.svc.close()
-    // The earlier run's index files, dated after the next run starts, so git trusts what they say.
+    // The earlier run's index, dated after the next run starts, so git trusts what it says. Its last add may
+    // still run: its lock comes and goes, and the index itself only ever changes by a rename.
     const saved = temp('bp-saved-')
-    for (const name of readdirSync(kept).filter((n) => n.startsWith('index')))
+    for (const name of readdirSync(kept).filter((n) => n.startsWith('index') && !n.endsWith('.lock')))
       copyFileSync(join(kept, name), join(saved, name))
     writeFileSync(join(saved, '.date'), '')
     const later = Date.now() / 1000 + 60
