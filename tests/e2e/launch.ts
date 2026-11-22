@@ -25,6 +25,8 @@ export interface LaunchOptions {
   home?: string
   /** The Developer's shell (`SHELL`). Defaults to the fake shell. */
   shell?: string
+  /** Variables to set, or with `undefined` to remove, in the app's environment. */
+  env?: Record<string, string | undefined>
 }
 
 const root = resolve(__dirname, '../..')
@@ -68,9 +70,15 @@ export async function launch(opts: LaunchOptions = {}): Promise<Launched> {
     PATH:
       opts.path === 'no-claude' ? noClaudePath() : `${fixtureBin}${delimiter}${process.env['PATH'] ?? ''}`,
     SHELL: opts.shell ?? join(fixtureBin, 'fake-shell'),
+    // Started as from a terminal, so Blueprint does not read the login shell's environment first.
+    TERM: 'xterm-256color',
     BLUEPRINT_E2E: '1',
     BLUEPRINT_TEST_LOG: log,
     DBUS_SESSION_BUS_ADDRESS: noSessionBus,
+  }
+  for (const [key, value] of Object.entries(opts.env ?? {})) {
+    if (value === undefined) delete env[key]
+    else env[key] = value
   }
   const app = await electron.launch({
     args: [

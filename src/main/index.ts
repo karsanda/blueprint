@@ -1,7 +1,9 @@
+import { userInfo } from 'node:os'
 import { basename, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { app, BrowserWindow, dialog, Menu, net, protocol, screen, shell, type WebContents } from 'electron'
 import type { WindowBounds } from '../shared/api'
+import { loginEnvironment, mergeEnvironment, needsLoginEnvironment } from './environment'
 import { resolveFolder } from './folder'
 import { type IpcDeps, registerIpc } from './ipc'
 import { initialWindow, layoutFile, readLayout, writeLayout } from './layout/store'
@@ -94,6 +96,12 @@ void app.whenReady().then(async () => {
     const file = rendererFile(rendererDir, request.url)
     return file ? net.fetch(pathToFileURL(file).toString()) : new Response(null, { status: 404 })
   })
+  // Started by the desktop, Blueprint takes the login shell's environment before it starts any program, so
+  // Claude Code and its tools find what the Developer's terminal would.
+  if (needsLoginEnvironment(process.env)) {
+    const login = await loginEnvironment(process.env['SHELL'] || userInfo().shell || '/bin/sh')
+    if (login) process.env = mergeEnvironment(process.env, login)
+  }
   const folder = resolveFolder(process.argv, { packaged: app.isPackaged, cwd: process.cwd() })
   // The window is created after the listener and settings file exist, so every handler is
   // there before the renderer loads.
