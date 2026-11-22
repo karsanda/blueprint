@@ -37,19 +37,22 @@ export function TerminalPanel({ api, params }: IDockviewPanelProps<TerminalParam
       // The browser may still hold focus on the clicked tab for a frame or two, so keep asking until
       // the terminal has it.
       let frames = 0
+      // The terminal's own window: a pop-out has its own document, focus and frames.
+      const doc = term?.textarea?.ownerDocument ?? document
+      const win = doc.defaultView ?? window
       const take = () => {
         // A rename field the Developer opened by double-clicking keeps the keyboard.
-        if (document.activeElement?.classList.contains('bp-tab-name')) return
+        if (doc.activeElement?.classList.contains('bp-tab-name')) return
         // A tab that stopped being active meanwhile (as tabs do while a preset rearranges the dock) must
         // not take the keyboard: focusing its terminal would make dockview activate it again.
         if (!api.isActive) return
         term?.focus()
-        if (api.isActive && term?.textarea && document.activeElement !== term.textarea && ++frames < 30) {
-          requestAnimationFrame(take)
+        if (api.isActive && term?.textarea && doc.activeElement !== term.textarea && ++frames < 30) {
+          win.requestAnimationFrame(take)
         }
       }
       // The first try waits a frame, so it runs after the click's own focus change onto the tab.
-      requestAnimationFrame(take)
+      win.requestAnimationFrame(take)
     }
     const subs = [
       api.onDidActiveChange((e) => {

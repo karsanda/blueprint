@@ -1,5 +1,5 @@
 import { type ElectronApplication, expect, type Locator, type Page, test } from '@playwright/test'
-import { launch, probeText, readLog } from './launch'
+import { launch, probeRenders, probeText, readLog } from './launch'
 
 /** A tab by its exact title: `Shell` is also part of `Shell 2`. */
 function tab(page: Page, title: string): Locator {
@@ -43,6 +43,10 @@ test('Pop out moves a pane into its own window, and closing it brings it back', 
   await pop.locator('[data-tab="shell-1"] .xterm-helper-textarea').focus()
   await pop.keyboard.type('x')
   await expect.poll(() => readLog(log, 'fake-shell.input')).toContain('x')
+  // It draws there too: the fake shell answers `f` with a full-screen page.
+  const before = await probeRenders(page, 'shell-1')
+  await pop.keyboard.type('f')
+  await expect.poll(() => probeRenders(page, 'shell-1')).toBeGreaterThan(before)
   await closePopouts(app)
   await expect(page.locator('[data-tab="shell-1"]')).toHaveCount(1)
   await expect.poll(() => app.windows().length).toBe(1)
@@ -172,5 +176,65 @@ test('a pop-out window refuses to navigate or open windows', async () => {
   await pop.waitForTimeout(300)
   expect(app.windows().length).toBe(2)
   expect(await app.evaluate(() => globalThis.openedUrls)).toEqual(['https://example.com/docs'])
+  await app.close()
+})
+
+test('a terminal opened in a pop-out still draws after the pop-out closes', async () => {
+  const { app, page, log } = await launch()
+  await ready(page)
+  const pop = await popOut(app, page, 'Shell')
+  await pop.locator('[data-tab="shell-1"] .xterm-helper-textarea').focus()
+  await pop.keyboard.press('Control+Shift+KeyT')
+  await expect.poll(() => probeText(page, 'shell-2')).toContain('fake-shell ready')
+  const inPopout = await probeRenders(page, 'shell-2')
+  await pop.locator('[data-tab="shell-2"] .xterm-helper-textarea').focus()
+  await pop.keyboard.type('f')
+  await expect.poll(() => probeRenders(page, 'shell-2')).toBeGreaterThan(inPopout)
+  await closePopouts(app)
+  await expect(page.locator('[data-tab="shell-2"]')).toHaveCount(1)
+  const before = await probeRenders(page, 'shell-2')
+  // The pane that comes back hands the keyboard to its active tab for a few frames; focus Shell 2 after.
+  const textarea = page.locator('[data-tab="shell-2"] .xterm-helper-textarea')
+  await expect(async () => {
+    await textarea.focus()
+    await expect(textarea).toBeFocused({ timeout: 300 })
+  }).toPass()
+  await page.keyboard.type('f')
+  await expect.poll(() => readLog(log, 'fake-shell.input')).toContain('f')
+  await expect.poll(() => probeText(page, 'shell-2')).toContain('BOTTOM')
+  await expect.poll(() => probeRenders(page, 'shell-2')).toBeGreaterThan(before)
+  await app.close()
+})
+
+test("direction keys skip a popped-out pane's empty place", async () => {
+  const { app, page } = await launch()
+  await ready(page)
+  await popOut(app, page, 'Claude')
+  await page.locator('[data-tab="shell-1"] .xterm-helper-textarea').focus()
+  await page.keyboard.press('Control+Shift+KeyH')
+  await expect(groupWith(page, 'Changes')).toHaveClass(/dv-active-group/)
+  await page.locator('[data-tab="shell-1"] .xterm-helper-textarea').focus()
+  await page.keyboard.press('Control+Shift+Alt+KeyH')
+  await expect(groupWith(page, 'Changes').locator('.dv-tab', { hasText: 'Shell' })).toBeVisible()
+  await expect(page.locator('[data-tab="shell-1"]')).toBeVisible()
+  await app.close()
+})
+
+test('a tab in a pop-out can be renamed', async () => {
+  const { app, page } = await launch()
+  await ready(page)
+  await groupWith(page, 'Shell').getByRole('button', { name: 'New shell' }).click()
+  await expect.poll(() => probeText(page, 'shell-2')).toContain('fake-shell ready')
+  const pop = await popOut(app, page, 'Shell 2')
+  await expect(tab(pop, 'Shell 2')).toHaveClass(/dv-active-tab/)
+  await tab(pop, 'Shell').locator('.dv-default-tab-content').dblclick()
+  const field = pop.getByRole('textbox', { name: 'Shell name' })
+  await expect(field).toBeFocused()
+  await pop.waitForTimeout(700)
+  await expect(field).toBeFocused()
+  await pop.keyboard.press('Control+A')
+  await pop.keyboard.type('logs')
+  await pop.keyboard.press('Enter')
+  await expect(tab(pop, 'logs')).toBeVisible()
   await app.close()
 })

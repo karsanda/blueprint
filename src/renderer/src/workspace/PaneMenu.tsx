@@ -2,6 +2,7 @@ import { Menu } from '@base-ui/react/menu'
 import type { DockviewApi, DockviewGroupPanel, IDockviewHeaderActionsProps } from 'dockview-react'
 import { Ellipsis } from 'lucide-react'
 import { useCallback, useSyncExternalStore } from 'react'
+import { neighbourInDirection } from './commands'
 
 type Side = 'left' | 'right' | 'top' | 'bottom'
 
@@ -21,7 +22,7 @@ const LOOK: { direction: 'left' | 'right' | 'up' | 'down'; side: Side }[] = [
 /** Lifts a docked pane above the layout, noting the pane beside it so Dock can put it back. */
 export function floatPane(api: DockviewApi, group: DockviewGroupPanel): void {
   for (const { direction, side } of LOOK) {
-    const neighbour = api.adjacentGroupInDirection(group, direction)?.activePanel
+    const neighbour = neighbourInDirection(api, group, direction)?.activePanel
     if (neighbour) {
       origins.set(group.id, { panelId: neighbour.id, side })
       break

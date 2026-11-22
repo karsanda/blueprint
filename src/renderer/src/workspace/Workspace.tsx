@@ -127,8 +127,10 @@ function BlueprintTab(props: IDockviewPanelHeaderProps) {
         // activation event, so put the keyboard back in its terminal once that has happened. A press on the
         // close action is left alone.
         if (editing || (e.target instanceof Element && e.target.closest('.dv-default-tab-action'))) return
-        requestAnimationFrame(() => {
-          if (document.activeElement?.classList.contains('bp-tab-name')) return
+        // The tab's own window: in a pop-out, focus and frames are that window's.
+        const doc = e.currentTarget.ownerDocument
+        ;(doc.defaultView ?? window).requestAnimationFrame(() => {
+          if (doc.activeElement?.classList.contains('bp-tab-name')) return
           findSession(props.api.id)?.term?.focus()
         })
       }}
