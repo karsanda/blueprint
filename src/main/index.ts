@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url'
 import { app, BrowserWindow, dialog, Menu, net, protocol, screen, shell, type WebContents } from 'electron'
 import type { WindowBounds } from '../shared/api'
 import { detachedArgs, devUserData, shouldDetach, takeDetachMarker } from './detach'
+import { e2eLog } from './e2e'
 import { loginEnvironment, mergeEnvironment, needsLoginEnvironment } from './environment'
 import { resolveFolder } from './folder'
 import { macMenuTemplate } from './menu'
@@ -216,7 +217,7 @@ void app.whenReady().then(async () => {
   // Both events fire on quit, so the cleanup runs once.
   let cleaned = false
   const cleanUp = (): void => {
-    manager.killAll()
+    manager.close()
     if (cleaned) return
     cleaned = true
     if (deps.folder.folder && deps.holdsFolder)
@@ -229,6 +230,7 @@ void app.whenReady().then(async () => {
   }
   // No terminal outlives the window: quitting ends every Claude session and shell.
   app.on('window-all-closed', () => {
+    e2eLog('all windows closed')
     cleanUp()
     app.quit()
   })
@@ -236,7 +238,9 @@ void app.whenReady().then(async () => {
   // closes docks its pane back before the main window saves the layout, so the pop-out would not come back.
   // So the main window closes first; it closes its pop-outs, and the last window to close quits.
   let closingMain = false
+  app.on('will-quit', () => e2eLog('will quit'))
   app.on('before-quit', (event) => {
+    e2eLog('before quit')
     if (!closingMain && win && !win.isDestroyed() && BrowserWindow.getAllWindows().length > 1) {
       closingMain = true
       event.preventDefault()
