@@ -25,6 +25,7 @@ import { installLayoutSaving, restoreLayout } from './persist'
 import { CloseDialog, requestClose } from './CloseDialog'
 import { GroupActions } from './GroupActions'
 import { tabKind } from './sessions'
+import { useWorkspaceApi } from './workspaceApi'
 
 const blueprintTheme: DockviewTheme = { name: 'blueprint', className: 'dockview-theme-blueprint', gap: 6 }
 const components = {
@@ -177,6 +178,7 @@ export function Workspace() {
             installTitle(e.api)
             installReviewFollow(e.api)
             installNotifications(e.api)
+            useWorkspaceApi.setState({ api: e.api })
           })()
         }}
       />

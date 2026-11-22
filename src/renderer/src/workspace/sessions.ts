@@ -48,8 +48,16 @@ export function isShellTab(id: string): boolean {
   return tabKind(id) === 'shell'
 }
 
-/** Opens a new terminal of `kind` as the active tab of `group`, with the cursor in it. */
-export function openTab(api: DockviewApi, group: DockviewGroupPanel, kind: TerminalKind): void {
+/**
+ * Opens a new terminal of `kind` as the active tab of `group`, with the cursor in it. A `background` tab
+ * opens without taking the active tab or the keyboard, for a caller that places it and the focus itself.
+ */
+export function openTab(
+  api: DockviewApi,
+  group: DockviewGroupPanel,
+  kind: TerminalKind,
+  { background = false }: { background?: boolean } = {},
+): void {
   const { id, title } = nextTab(
     kind,
     api.panels.map((p) => p.id),
@@ -62,9 +70,10 @@ export function openTab(api: DockviewApi, group: DockviewGroupPanel, kind: Termi
     params: { kind },
     renderer: 'always',
     position: { referenceGroup: group },
+    ...(background ? { inactive: true } : {}),
   })
   noteUsed(id)
-  focusTab(api, id)
+  if (!background) focusTab(api, id)
 }
 
 /** Closes a Claude or shell tab: its pane, its terminal view, its program, and its status. */
