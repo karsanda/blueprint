@@ -1,5 +1,16 @@
 import { execFileSync } from 'node:child_process'
-import { chmodSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -46,9 +57,15 @@ interface FakeGit {
   git: string
   /**
    * `hangs`: that many next adds hang. `slow`: every add sleeps SLOW_MS after it ran, so it reads the Folder
-   * at once but ends late. `hangOpen`: rev-parse hangs.
+   * at once but ends late. `hangOpen`: rev-parse hangs. `lateWrite`: the next add first copies every file
+   * of `from` into `to`, dated as `from/.date`, as a git of an earlier run that finishes late would write it.
    */
-  set(switches: { hangs?: number; slow?: boolean; hangOpen?: boolean }): void
+  set(switches: {
+    hangs?: number
+    slow?: boolean
+    hangOpen?: boolean
+    lateWrite?: { from: string; to: string }
+  }): void
 }
 
 /** A `git` that runs the real git, slowed or hung by its switches. */
@@ -62,6 +79,10 @@ function fakeGit(): FakeGit {
       `d='${dir}'`,
       'if [ "$1" = rev-parse ] && [ -e "$d/hang-open" ]; then exec sleep 5; fi',
       'if [ "$1" = add ]; then',
+      '  if [ -e "$d/late-write" ]; then',
+      '    from=$(sed -n 1p "$d/late-write"); to=$(sed -n 2p "$d/late-write"); rm "$d/late-write"',
+      '    for f in "$from"/*; do cp "$f" "$to/" && touch -r "$from/.date" "$to/$(basename "$f")"; done',
+      '  fi',
       '  n=$(cat "$d/hangs" 2>/dev/null || echo 0)',
       '  if [ "$n" -gt 0 ]; then echo $((n - 1)) >"$d/hangs"; exec sleep 5; fi',
       `  if [ -e "$d/slow" ]; then git "$@"; s=$?; sleep ${SLOW_MS / 1000}; exit $s; fi`,
@@ -77,7 +98,8 @@ function fakeGit(): FakeGit {
   }
   return {
     git: program,
-    set({ hangs, slow, hangOpen }) {
+    set({ hangs, slow, hangOpen, lateWrite }) {
+      if (lateWrite) writeFileSync(join(dir, 'late-write'), `${lateWrite.from}\n${lateWrite.to}\n`)
       if (hangs !== undefined) writeFileSync(join(dir, 'hangs'), String(hangs))
       if (slow !== undefined) flag('slow', slow)
       if (hangOpen !== undefined) flag('hang-open', hangOpen)
@@ -709,6 +731,46 @@ describe('ReviewService across a reopen', () => {
     first.svc.close()
     const second = await rig({ repo: first.repo, kept, resume: ID1 })
     expect(await second.listed('session', [])).toEqual([])
+  })
+
+  it("an index an earlier run writes late does not break the next run's snapshots", async () => {
+    const kept = temp('bp-kept-')
+    const first = await firstRun(kept)
+    first.svc.endSession('claude-1')
+    first.svc.close()
+    // The earlier run's index, dated after the next run starts, so git trusts what it says. Its last add may
+    // still run: its lock comes and goes, and the index itself only ever changes by a rename.
+    const saved = temp('bp-saved-')
+    for (const name of readdirSync(kept).filter((n) => n.startsWith('index') && !n.endsWith('.lock')))
+      copyFileSync(join(kept, name), join(saved, name))
+    writeFileSync(join(saved, '.date'), '')
+    const later = Date.now() / 1000 + 60
+    utimesSync(join(saved, '.date'), later, later)
+    // The next run wipes the kept store, as nothing is kept, and its first add finds them written back.
+    const fake = fakeGit()
+    fake.set({ lateWrite: { from: saved, to: kept } })
+    const second = await rig({ repo: first.repo, kept, resume: ID1, git: fake.git })
+    second.write('e.txt')
+    expect(await second.listed('session', [['e.txt', []]])).toEqual([['e.txt', []]])
+  })
+
+  it('a kept store the next run cannot wipe whole still opens', async () => {
+    const kept = temp('bp-kept-')
+    const first = await firstRun(kept)
+    first.svc.endSession('claude-1')
+    first.svc.close()
+    // What a git an earlier run left running may still be writing: the wipe cannot remove it.
+    const stuck = join(kept, 'objects', 'stuck')
+    mkdirSync(stuck, { recursive: true })
+    writeFileSync(join(stuck, 'object'), '')
+    chmodSync(stuck, 0o500)
+    try {
+      const second = await rig({ repo: first.repo, kept, resume: ID1 })
+      second.write('e.txt')
+      expect(await second.listed('session', [['e.txt', []]])).toEqual([['e.txt', []]])
+    } finally {
+      chmodSync(stuck, 0o700)
+    }
   })
 
   it('a Blueprint that does not hold the Folder keeps nothing', async () => {

@@ -128,3 +128,12 @@ test('killAll ends every program', async () => {
   manager.killAll()
   await expect.poll(() => alive(a) || alive(b), { timeout: 3000 }).toBe(false)
 })
+
+test('starts no terminal once Blueprint quits', () => {
+  manager.close()
+  // A start still in flight when Blueprint quits, such as Claude's waiting for its session base.
+  expect(() => manager.start('late', sh('echo started > started; sleep 5'), 80, 24)).toThrow(
+    'Blueprint is quitting',
+  )
+  expect(read('started')).toBe('')
+})

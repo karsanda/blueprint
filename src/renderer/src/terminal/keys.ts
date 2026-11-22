@@ -1,5 +1,4 @@
 import type { TerminalKind } from '../../../shared/api'
-import type { PresetId } from '../workspace/presets'
 
 export interface KeyInput {
   type: string
@@ -33,7 +32,6 @@ export type WorkspaceAction =
   | { kind: 'focus' | 'move'; direction: Direction }
   | { kind: 'next-tab' | 'previous-tab' | 'zoom' }
   | { kind: 'new'; tab: TerminalKind }
-  | { kind: 'preset'; preset: PresetId }
 
 const DIRECTIONS: Record<string, Direction> = { KeyH: 'left', KeyJ: 'down', KeyK: 'up', KeyL: 'right' }
 
@@ -41,17 +39,13 @@ const OTHER_KEYS: Record<string, WorkspaceAction> = {
   KeyT: { kind: 'new', tab: 'shell' },
   KeyN: { kind: 'new', tab: 'claude' },
   KeyZ: { kind: 'zoom' },
-  Digit1: { kind: 'preset', preset: 'agent-and-review' },
-  Digit2: { kind: 'preset', preset: 'two-agents' },
-  Digit3: { kind: 'preset', preset: 'terminal-heavy' },
-  Digit4: { kind: 'preset', preset: 'focus' },
 }
 
 /**
  * The workspace keys, as terminal emulators take them: Ctrl+Shift+H/J/K/L move the focus between panes,
- * adding Alt moves the tab; Ctrl+Shift+T and N open a shell and a Claude session, Ctrl+Shift+Z zooms, and
- * Ctrl+Shift+1 to 4 pick a preset; Ctrl+Tab and Ctrl+Shift+Tab switch tabs. Every other key goes to the
- * program, arrows included: programs tell Ctrl+Shift+arrows apart from Ctrl+arrows.
+ * adding Alt moves the tab; Ctrl+Shift+T and N open a shell and a Claude session, and Ctrl+Shift+Z zooms;
+ * Ctrl+Tab and Ctrl+Shift+Tab switch tabs. Every other key goes to the program, arrows included: programs
+ * tell Ctrl+Shift+arrows apart from Ctrl+arrows.
  */
 export function workspaceKeyAction(e: KeyInput): WorkspaceAction | null {
   if (e.type !== 'keydown' || e.isComposing || e.metaKey || !e.ctrlKey) return null

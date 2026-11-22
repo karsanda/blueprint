@@ -1,5 +1,6 @@
 import * as pty from 'node-pty'
 import type { ExitInfo } from '../../shared/api'
+import { e2eLog } from '../e2e'
 import { foregroundProgram, foregroundProgramMac } from './foreground'
 import type { SpawnSpec } from './spec'
 
@@ -16,12 +17,15 @@ export interface TerminalSink {
 export class TerminalManager {
   private readonly terminals = new Map<string, pty.IPty>()
   private readonly sink: TerminalSink
+  private closed = false
 
   constructor(sink: TerminalSink) {
     this.sink = sink
   }
 
+  /** Throws once Blueprint quits: a start still in flight then, such as Claude's, must not outlive it. */
   start(tabId: string, spec: SpawnSpec, cols: number, rows: number): number {
+    if (this.closed) throw new Error('Blueprint is quitting.')
     this.kill(tabId)
     const term = pty.spawn(spec.file, spec.args, {
       name: 'xterm-256color',
@@ -39,6 +43,7 @@ export class TerminalManager {
       this.terminals.delete(tabId)
       this.sink.exit(tabId, signal ? { exitCode, signal } : { exitCode })
     })
+    e2eLog(`terminal ${tabId} started, pid ${term.pid}`)
     return term.pid
   }
 
@@ -69,6 +74,13 @@ export class TerminalManager {
 
   killAll(): void {
     for (const tabId of this.terminals.keys()) this.kill(tabId)
+  }
+
+  /** Ends every terminal for good, as Blueprint quits: no terminal starts after it. */
+  close(): void {
+    this.closed = true
+    e2eLog(`closing ${this.terminals.size} terminals`)
+    this.killAll()
   }
 }
 

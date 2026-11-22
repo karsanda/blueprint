@@ -1,8 +1,8 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, dirname, join, resolve } from 'node:path'
-import { _electron as electron, type ElectronApplication, type Page } from '@playwright/test'
+import { _electron as electron, type ElectronApplication, type Page, test } from '@playwright/test'
 import type { ReviewState } from '../../src/shared/api'
 import type { TerminalProbe } from '../../src/shared/probe'
 
@@ -45,13 +45,13 @@ function noClaudePath(): string {
  * there the windows show. A session bus that doesn't exist keeps desktop notifications from reaching the
  * notification daemon.
  */
-const headless =
-  process.env['BLUEPRINT_E2E_HEADED'] === '1' || process.platform !== 'linux'
-    ? []
-    : [
-        '--ozone-platform=headless',
-        `--ozone-override-screen-size=${process.env['BLUEPRINT_E2E_SCREEN'] ?? '1920,1080'}`,
-      ]
+export const windowsShow = process.env['BLUEPRINT_E2E_HEADED'] === '1' || process.platform !== 'linux'
+const headless = windowsShow
+  ? []
+  : [
+      '--ozone-platform=headless',
+      `--ozone-override-screen-size=${process.env['BLUEPRINT_E2E_SCREEN'] ?? '1920,1080'}`,
+    ]
 const noSessionBus = 'unix:path=/nonexistent/blueprint-e2e-bus'
 
 /** Where a run's temp dirs go: the run directory its global setup made, or the system's. */
@@ -59,6 +59,26 @@ const e2eRoot = (): string => process.env.BLUEPRINT_E2E_ROOT ?? tmpdir()
 
 function definedEnv(env: NodeJS.ProcessEnv): Record<string, string> {
   return Object.fromEntries(Object.entries(env).filter((e): e is [string, string] => e[1] !== undefined))
+}
+
+let launches = 0
+
+/**
+ * A log of one launch in the test's output folder, `app-<n>.log`: each step of the start, and what the app
+ * prints. CI keeps the output folder of a failed run, so a launch that hangs leaves a trail.
+ */
+function launchLog(): (line: string) => void {
+  const n = ++launches
+  let file: string
+  try {
+    file = test.info().outputPath(`app-${n}.log`)
+  } catch {
+    // Called outside a test: nowhere to keep it.
+    return () => undefined
+  }
+  mkdirSync(dirname(file), { recursive: true })
+  const start = Date.now()
+  return (line) => appendFileSync(file, `${String(Date.now() - start).padStart(6)} ms  ${line}\n`)
 }
 
 export async function launch(opts: LaunchOptions = {}): Promise<Launched> {
@@ -84,6 +104,8 @@ export async function launch(opts: LaunchOptions = {}): Promise<Launched> {
     if (value === undefined) delete env[key]
     else env[key] = value
   }
+  const record = launchLog()
+  record('launching')
   const app = await electron.launch({
     args: [
       join(root, 'out/main/index.js'),
@@ -95,10 +117,18 @@ export async function launch(opts: LaunchOptions = {}): Promise<Launched> {
     cwd: tmp,
     env,
   })
+  const child = app.process()
+  record(`launched, pid ${child.pid}`)
+  child.stdout?.on('data', (chunk: Buffer) => record(`stdout: ${chunk.toString().trimEnd()}`))
+  child.stderr?.on('data', (chunk: Buffer) => record(`stderr: ${chunk.toString().trimEnd()}`))
+  child.on('exit', (code, signal) => record(`exited, code ${code}, signal ${signal}`))
   const page = await app.firstWindow()
+  record('first window')
   await page.waitForLoadState('domcontentloaded')
+  record('page loaded')
   // The renderer installs the probe when its script runs, which can be after the DOM is loaded.
   await page.waitForFunction(() => window.blueprintProbe !== undefined, undefined, { timeout: 15000 })
+  record('probe ready')
   return { app, page, log, folder: folder ?? '', home }
 }
 

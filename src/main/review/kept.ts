@@ -59,7 +59,9 @@ export function forgetKept(dir: string, id: string): void {
 
 /**
  * Drops kept sessions untouched for 30 days: a conversation whose tab is gone is never resumed. When no
- * session is left, the whole dir goes, so its snapshot store starts afresh instead of growing.
+ * session is left, the whole dir goes, so its snapshot store starts afresh instead of growing. What cannot
+ * go stays, such as objects a git of an earlier run still writes: no kept session needs them, and each run
+ * starts a fresh index of its own.
  */
 export function pruneKept(dir: string, now: number): void {
   const sessions = join(dir, 'sessions')
@@ -82,5 +84,10 @@ export function pruneKept(dir: string, now: number): void {
     }
     rmSync(file, { force: true })
   }
-  if (left === 0) rmSync(dir, { recursive: true, force: true })
+  if (left > 0) return
+  try {
+    rmSync(dir, { recursive: true, force: true })
+  } catch {
+    // Left for a later prune.
+  }
 }

@@ -96,17 +96,6 @@ test('Ctrl+Shift+Z zooms the pane and back', async () => {
   await app.close()
 })
 
-test('Ctrl+Shift+4 and 1 pick Focus and Agent and review', async () => {
-  const { app, page } = await launch()
-  await ready(page)
-  await focusTerminal(page, 'claude-1')
-  await page.keyboard.press('Control+Shift+Digit4')
-  await expect(page.locator('.dv-groupview')).toHaveCount(1)
-  await page.keyboard.press('Control+Shift+Digit1')
-  await expect(page.locator('.dv-groupview')).toHaveCount(4)
-  await app.close()
-})
-
 test('keys the programs use still reach them', async () => {
   const { app, page, log } = await launch()
   await ready(page)

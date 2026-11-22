@@ -43,34 +43,13 @@ Code-level detail for [Arrange my panes](../../usecase/blueprint/arrange_my_pane
     - `vim` (an alias for nvim) in Shell 2 made closing it ask: "Close Shell 2?", "It is still running nvim." After Close shell, both nvim processes were gone.
     - Shell 3, at its prompt, closed at once with no dialog.
     - Shell 4, renamed "dev server", came back under that name after reopening, as a fresh shell without its old output.
-- Presets, keys, floating and pop-out: see the section below.
+- Keys, floating and pop-out: see the section below.
 
-## Presets, keys, floating and pop-out
+## Keys, floating and pop-out
 
 Detail for [Arrange my panes](../../usecase/blueprint/arrange_my_panes.md), Slice 3. Changes and Difference stay two panes here; merging them into one comes after the MVP ([#35](https://github.com/karsanda/blueprint/issues/35)).
 
-### Presets
-
-- The Developer picks a preset from a Layout menu at the right end of the top bar, which lists each preset with its key, or with Ctrl+Shift+1 to 4.
-- The four presets:
-
-  | Key | Preset | Panes |
-  | --- | --- | --- |
-  | 1 | Agent and review | The default layout: Changes on the left at full height, Claude in the middle and Difference on the right, Shell below them both. |
-  | 2 | Two agents | Changes on the left at full height, with Difference as a tab behind it. Claude and Claude 2 side by side, Shell below them both. |
-  | 3 | Terminal heavy | Claude on the left, with Changes and Difference as tabs behind it. Shell and Shell 2 stacked on the right. |
-  | 4 | Focus | One pane holding every tab, with Claude active. |
-
-- Tabs already open:
-  - Every open tab gets a place, and a preset never closes one.
-  - The lowest-numbered Claude tab is "Claude" in the table, and the next one "Claude 2"; the same goes for shells.
-  - Further Claude tabs stack in the last Claude pane, and further shells in the last Shell pane, in number order.
-  - Two agents with one Claude tab open opens a new Claude session for its second pane, as `+` does. Terminal heavy with one shell open opens a new shell the same way. That tab opens in the background, so the keyboard stays where the keyboard rule puts it.
-- Every pane shows its first tab, except that the tab that had the keyboard before keeps it, in whichever pane it lands. Focus is the exception: its active tab, with the keyboard, is the Claude tab that had the keyboard, or else the lowest-numbered Claude tab. Changes keeps its 250-pixel width; the other panes share the rest evenly.
-- A preset docks floating panes and closes pop-out windows, so their tabs take their places in it.
-- How: the renderer builds the preset's dockview JSON from the open panels, their titles and parameters (a Claude tab keeps its saved conversation). It loads that with `api.fromJSON(json, { reuseExistingPanels: true })`, which moves the open panels into place rather than making them anew. Terminals would survive either way, because a terminal session lives outside React.
-- Constraint: a preset must not look like closing tabs. Whatever treats a removed Claude tab as a closed session must keep each tab's session across a preset. Today that is the review's `onDidRemovePanel`, which ends the tab's review session in the Changes pane. With `reuseExistingPanels` no panel is removed, so the review needs nothing.
-- While `fromJSON` stages the panels, each tab is briefly active, and a terminal tab queues a focus. A queued focus does nothing once its tab is no longer active; otherwise it would make dockview activate that tab again, after the preset.
+Blueprint offers no preset layouts. The Developer arranges the panes by hand, and Blueprint remembers them per Folder. A Layout menu with four presets (Ctrl+Shift+1 to 4) shipped in v0.1.0 and was removed in [#48](https://github.com/karsanda/blueprint/issues/48).
 
 ### Keys
 
@@ -83,12 +62,11 @@ Blueprint takes Ctrl+Shift keys, as terminal emulators do; it already takes Ctrl
 | Next / previous tab in the pane, wrapping | Ctrl+Tab / Ctrl+Shift+Tab |
 | New shell / new Claude session | Ctrl+Shift+T / Ctrl+Shift+N |
 | Zoom the pane in and out | Ctrl+Shift+Z |
-| Preset 1 to 4 | Ctrl+Shift+1 to 4 |
 
 - One key table, in `src/renderer/src/terminal/keys.ts` beside copy and paste, maps a key to an action. A capture-phase `keydown` listener on the main window, and on each pop-out window as it opens, consults it, whichever element has the keyboard, terminals included. It stops a handled key there, so the key never reaches the terminal or its program. Keys pressed while an input method is composing, and keys typed in the rename field, are left alone.
 - No workspace key acts while the close question or a menu is open in any Blueprint window: a key behind them would change the layout under the Developer's eyes. Both are mounted only while open, so the listener looks for an element with `role="dialog"` or `role="menu"`.
 - A pop-out window's listener is removed when the window closes. dockview reports the removal by the pop-out group's id: by then its `window` is already null.
-- Keys match on `KeyboardEvent.code` (`KeyH`, `Digit1`, `Tab`) with the modifiers held exactly, so a keyboard layout or Shift changing the character does not matter. Ctrl+Shift+H focuses only with Alt up; with Alt down it moves the tab.
+- Keys match on `KeyboardEvent.code` (`KeyH`, `KeyZ`, `Tab`) with the modifiers held exactly, so a keyboard layout or Shift changing the character does not matter. Ctrl+Shift+H focuses only with Alt up; with Alt down it moves the tab.
 - Direction is by where the panes sit on screen: the nearest pane whose centre lies that way, as dockview's `adjacentGroupInDirection` finds it. Blueprint does the search itself so it can skip panes with no size: dockview keeps a popped-out pane's place in the grid as a hidden pane, which must never take a tab or the keyboard. From the Shell pane of the default layout, Claude and Difference tie for "above"; either one takes the keyboard.
 - A key acts from the pane whose terminal has the keyboard, and else from dockview's active pane: dockview does not always make a pane active before the next key once its terminal takes the keyboard. At the window's edge the key does nothing. Direction keys move among the main window's docked panes. A floating pane or a pop-out window takes the other keys for its own panes.
 - A moved tab becomes the active tab of the pane it joins and keeps the keyboard. Moving the last tab out of a pane closes that pane, as dragging does.
@@ -122,7 +100,6 @@ Blueprint takes Ctrl+Shift keys, as terminal emulators do; it already takes Ctrl
 - Code that reads the focus or asks for a frame uses the window of the element it acts on: a pop-out has its own `document`. The rename field in a pop-out keeps the keyboard because of this.
 - Known gap: while the main window is minimized its frames may pause, and with them the drawing of terminals in pop-out windows. Not checked: the test display never hides a minimized window.
 - Checked in the real app on 2026-11-22: the built app with the Developer's zsh, LazyVim and fzf, and the test Claude, in a scratch Folder.
-  - Each preset from the Layout menu and from its key gave its panes: Two agents opened Claude 2, and Terminal heavy opened Shell 2.
   - From Claude, Ctrl+Shift+L, H, J, K and H went to Difference, Claude, Shell, Claude and Changes. Ctrl+Shift+Alt+K moved Shell into the Claude pane.
   - In zsh, Ctrl+← still moved back a word: `echo one two`, then Ctrl+←, X and Enter printed `one Xtwo`. Alt+c still opened fzf's cd widget.
   - Float, then Dock, put Difference back to the right of Claude.
