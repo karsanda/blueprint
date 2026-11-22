@@ -95,6 +95,30 @@ The first release is `v0.1.0`, the MVP, for the Developer's own Ubuntu and macOS
 - The e2e harness passes Chromium's headless-display flags only on Linux; on the macOS runner the windows show on its screen.
 - A test that only makes sense on Linux, such as the Wayland branch, is skipped on macOS with its reason. Any other macOS failure gets a fix.
 
+### Found on the macOS runner
+
+- node-pty 1.1.0 publishes its macOS helper (`prebuilds/darwin-*/spawn-helper`) without the execute permission, so every terminal failed with `posix_spawnp failed`. A `postinstall` step (`scripts/fix_node_pty.cjs`) sets it, and the packaged app keeps it.
+- On Quit (Cmd+Q), macOS closed the pop-out windows before the main window, so their panes docked back before the layout was saved, and the pop-outs did not come back. Quitting now closes the main window first, which closes its pop-outs; the last window to close ends Blueprint.
+- The runner's screen is 1024 × 768, and its windows open slower than on Linux. Tests that assumed a bigger screen, Ctrl+A selecting all (on macOS it moves to the start of the line), or a program ready at once now wait or ask for what they need.
+
+## Checked
+
+On 2026-11-22.
+
+- The macOS runner, Apple Silicon: the unit tests and every end-to-end test pass, the macOS-only ones (Cmd+V pastes, the menu) included.
+- The `.deb`, built here, holds:
+  - the app with node-pty unpacked;
+  - the desktop entry and the icon;
+  - version 0.1.0;
+  - an install step that links `/usr/bin/blueprint`, sets up Chromium's sandbox, and installs Ubuntu 24's AppArmor profile.
+- The `.dmg`, built by the release workflow's dry run on a pull request, holds `Blueprint.app` with `Contents/Resources/bin/blueprint` and node-pty's `darwin-arm64` helper, both executable. The dry run created no release.
+- The packaged Linux app, run unpacked with the Developer's zsh and a scratch settings folder:
+  - started as from the desktop (no `TERM`), the `PATH` it gives programs grew from 3 entries to 23, mise's and `~/.local/bin` included, and it took `MISE_SHELL`. The Developer's own Claude Code started in the Claude pane;
+  - settings went to `<config>/Blueprint`;
+  - a busy shell in zsh asked "It is still running sleep.", Ctrl+Shift+4 gave one pane, and a pane popped out to `blueprint://app/popout.html`;
+  - started from a terminal on a relative folder, the prompt came back in 49 ms, and Blueprint went on running in a session of its own on the absolute folder after that terminal had gone.
+- Run unpacked, the app needs `--no-sandbox` on Ubuntu 24: Chromium's sandbox helper is only set up by the `.deb`'s install step.
+
 ### To check by hand on the Developer's Mac
 
 These were not checked: there is no Mac here, and CI cannot do them.
