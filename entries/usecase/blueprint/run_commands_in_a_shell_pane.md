@@ -63,9 +63,9 @@ Covers: Alternative Flow 3, Alternative Flow 4, Alternative Flow 5.
 
 Work items:
 
-- [ ] Open another shell in a new tab, and bring every shell tab back when the Folder reopens ([#13](https://github.com/karsanda/blueprint/issues/13))
-- [ ] Rename a shell's tab ([#13](https://github.com/karsanda/blueprint/issues/13))
-- [ ] Close a shell's tab, and confirm first while a program runs in it ([#13](https://github.com/karsanda/blueprint/issues/13))
+- [x] Open another shell in a new tab, and bring every shell tab back when the Folder reopens ([#13](https://github.com/karsanda/blueprint/issues/13))
+- [x] Rename a shell's tab ([#13](https://github.com/karsanda/blueprint/issues/13))
+- [x] Close a shell's tab, and confirm first while a program runs in it ([#13](https://github.com/karsanda/blueprint/issues/13))
 
 Test cases:
 

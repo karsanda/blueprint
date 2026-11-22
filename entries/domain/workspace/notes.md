@@ -36,6 +36,11 @@ Code-level detail for [Arrange my panes](../../usecase/blueprint/arrange_my_pane
   - Why the foreground process group and not the program's name: the shell's own name cannot be compared reliably. A `#!/usr/bin/env node` script reads as `node`, and a login shell as `-zsh`. Checked in a pseudo-terminal with `/bin/sh`, bash and zsh: `tpgid` is the shell's pid at the prompt, and `sleep`'s while `sleep 5` runs.
   - Restored layouts accept `shell-<n>` tabs (terminal, kind `shell`). See Remembering the layout.
   - Known gaps: the check is Linux only; macOS can read the same with `ps -o tpgid=`. A job sent to the background with `&` does not count as running, and closing ends it with the shell.
+  - Checked in the real app: the built app with the Developer's zsh and its usual prompt, in a scratch Folder, on 2026-11-22.
+    - New shell opened Shell 2 as the active tab, and `pwd` in it printed the Folder.
+    - `vim` (an alias for nvim) in Shell 2 made closing it ask: "Close Shell 2?", "It is still running nvim." After Close shell, both nvim processes were gone.
+    - Shell 3, at its prompt, closed at once with no dialog.
+    - Shell 4, renamed "dev server", came back under that name after reopening, as a fresh shell without its old output.
 - Keys: Alt h/j/k/l focus, Alt Shift h/j/k/l move the tab, Alt Enter new shell, Alt c new Claude session, Alt z zoom, Ctrl Tab next tab. Alt avoids the desktop's own Super shortcuts.
 - Presets: Agent and review, Two agents, Terminal heavy, Focus.
 - Look: the Blueprint tokens (Default, Light, Dark) feed Tailwind, shadcn/ui on Base UI, dockview's theme and the xterm.js palette. Window chrome in Overpass, pane text in Cascadia Code with ligatures, icons from Lucide.
