@@ -19,7 +19,7 @@ git write-tree
 ```
 
 - `<store>` is one folder per Folder. For the Blueprint that holds the Folder (see [Claude sessions](../claude_sessions/notes.md), One Blueprint per Folder) it is `<user data>/review-kept/<folderKey>`, kept across runs so This session survives a reopen (see Kept sessions below). Any other Blueprint uses a folder that belongs to its run: `<user data>/review-<pid>-<random>`. Blueprint removes that one on quit, and on start removes any left by a run whose process is gone. So two Blueprints on one Folder never share a store.
-- An index never outlives its objects: an index whose objects are gone breaks `write-tree`. The kept store keeps its objects but starts each run with a fresh index, since one may name objects the repository has collected since.
+- An index never outlives its objects: an index whose objects are gone breaks `write-tree`. The kept store keeps its objects, but each run gets a fresh index of its own, `index-<pid>-<random>`, and removes those of earlier runs. A git an earlier run left running can finish after the next run has wiped the store; with one shared index it wrote back entries whose objects were gone, and every snapshot failed with `invalid object`. An earlier index may also name objects the repository has collected since.
 - The repository's objects dir is `git rev-parse --path-format=absolute --git-path objects`, which also works in a linked worktree.
 - `-- .` keeps the snapshot to the Folder when the Folder is a subfolder of a repository.
 - `.gitignore` is respected, and untracked files are included.

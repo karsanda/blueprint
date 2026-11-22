@@ -45,13 +45,13 @@ function noClaudePath(): string {
  * there the windows show. A session bus that doesn't exist keeps desktop notifications from reaching the
  * notification daemon.
  */
-const headless =
-  process.env['BLUEPRINT_E2E_HEADED'] === '1' || process.platform !== 'linux'
-    ? []
-    : [
-        '--ozone-platform=headless',
-        `--ozone-override-screen-size=${process.env['BLUEPRINT_E2E_SCREEN'] ?? '1920,1080'}`,
-      ]
+export const windowsShow = process.env['BLUEPRINT_E2E_HEADED'] === '1' || process.platform !== 'linux'
+const headless = windowsShow
+  ? []
+  : [
+      '--ozone-platform=headless',
+      `--ozone-override-screen-size=${process.env['BLUEPRINT_E2E_SCREEN'] ?? '1920,1080'}`,
+    ]
 const noSessionBus = 'unix:path=/nonexistent/blueprint-e2e-bus'
 
 /** Where a run's temp dirs go: the run directory its global setup made, or the system's. */

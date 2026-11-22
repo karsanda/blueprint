@@ -1,7 +1,7 @@
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { type ElectronApplication, expect, type Locator, type Page, test } from '@playwright/test'
-import { gitFolder, launch, probeRenders, probeText, readLog, typeInto } from './launch'
+import { gitFolder, launch, probeRenders, probeText, readLog, typeInto, windowsShow } from './launch'
 
 /** A tab by its exact title: `Shell` is also part of `Shell 2`. */
 function tab(page: Page, title: string): Locator {
@@ -158,8 +158,11 @@ test('focusing a pop-out window refreshes the review', async () => {
     page.evaluate(() =>
       (window.reviewStates ?? []).flatMap((s) => (s.kind === 'changes' ? s.changes.map((c) => c.path) : [])),
     )
-  await page.waitForTimeout(500)
-  expect(await listed()).not.toContain('README.md')
+  // Where the windows show, as on macOS, the pop-out taking the real focus may refresh the review first.
+  if (!windowsShow) {
+    await page.waitForTimeout(500)
+    expect(await listed()).not.toContain('README.md')
+  }
   await app.evaluate(({ BrowserWindow }) => {
     BrowserWindow.getAllWindows()
       .find((w) => w.webContents.getURL().endsWith('popout.html'))

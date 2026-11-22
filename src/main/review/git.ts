@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { randomBytes } from 'node:crypto'
 import { chmodSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Change } from '../../shared/api'
@@ -133,8 +134,8 @@ export class SnapshotStore {
    * `git` is the git program. `timeoutMs` is how long a store command may run before it is killed, and
    * `openTimeoutMs` the same for `rev-parse`. A `rev-parse` that gives no answer rejects with GitTimeout: it
    * says nothing about the Folder. With `keep`, the store's objects stay from an earlier run, so the trees
-   * kept there can still be compared; its index starts afresh, as one may name objects the repository has
-   * since collected.
+   * kept there can still be compared. Each run then gets an index of its own, named for the run: a git that
+   * an earlier run left running may write its index late, over objects the store has since dropped.
    */
   static async open(
     folder: string,
@@ -154,15 +155,18 @@ export class SnapshotStore {
       if (error instanceof GitTimeout) throw error
       return { problem: errorCode(error) === 'ENOENT' ? 'no-git' : 'not-a-repo' }
     }
-    if (keep) {
-      rmSync(join(storeDir, 'index'), { force: true })
-      rmSync(join(storeDir, 'index.lock'), { force: true })
-    } else {
-      rmSync(storeDir, { recursive: true, force: true })
-    }
+    if (!keep) rmSync(storeDir, { recursive: true, force: true })
     mkdirSync(join(storeDir, 'objects'), { recursive: true })
+    let index = join(storeDir, 'index')
+    if (keep) {
+      // The indexes of earlier runs, and their locks, go: none of them is this run's.
+      for (const name of readdirSync(storeDir)) {
+        if (name.startsWith('index')) rmSync(join(storeDir, name), { force: true })
+      }
+      index = join(storeDir, `index-${process.pid}-${randomBytes(4).toString('hex')}`)
+    }
     const env = gitEnv({
-      GIT_INDEX_FILE: join(storeDir, 'index'),
+      GIT_INDEX_FILE: index,
       GIT_OBJECT_DIRECTORY: join(storeDir, 'objects'),
       GIT_ALTERNATE_OBJECT_DIRECTORIES: objects,
     })
