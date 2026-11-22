@@ -142,6 +142,17 @@ Checked on 2026-11-21 with the built app, Claude Code 2.1.330 in manual mode, an
 - The folder's own hooks still ran beside Blueprint's.
 - After `/clear`, a permission prompt still showed Needs you. Refusing it reached Idle, and a finished turn showed Idle.
 
+## Working copies
+
+Drafted, not built: detail for [Give a session its own working copy](../../usecase/blueprint/give_a_session_its_own_working_copy.md). A working copy is a Git worktree on a branch of its own.
+
+- Two ways to make one:
+  - Blueprint runs `git worktree add -b <branch> <path>` and starts `claude` with the worktree as its working directory. Blueprint then owns the path, the branch name and the removal.
+  - Claude Code makes its own: 2.1.330 has `-w, --worktree [name]`, which "creates a git worktree for this session". Its place and branch name are Claude Code's, so Blueprint would have to learn them, for example from a hook's `cwd`.
+- Resume: Claude Code files a transcript under the project directory it ran in (`~/.claude/projects/<folder>/<id>.jsonl`, see Resume after reopening). A resumed session must start in the same worktree.
+- The review takes its snapshots of the Folder's repository today. A session in a worktree needs its own: the worktree has its own index and `HEAD`, and its Changes count from the branch's starting commit.
+- Taking the work uncommitted fits `git merge --squash` without a commit, run in the Folder. It stops, and changes nothing, when the Folder's own uncommitted edits touch the same files.
+
 ## Open checks
 
 - A real desktop notification on GNOME, and clicking it to focus the session, is not yet verified by hand.

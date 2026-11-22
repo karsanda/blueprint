@@ -10,8 +10,9 @@ Rules for this file are in the `usecase` skill (`.agents/skills/usecase/SKILL.md
 | --- | --- |
 | Change | A file that was added, modified or deleted in the Folder. |
 | Claude session | One running conversation with Claude Code, shown in a tab. |
-| Folder | The project folder Blueprint is open on. Every session and shell works in it. |
+| Folder | The project folder Blueprint is open on. Sessions and shells work in it, unless they work in a working copy. |
 | Needs you | The status of a Claude session that waits for the Developer's answer or permission. |
 | Pane | An area of the window that holds one or more tabs. |
 | Tab | One Claude session, shell or view inside a pane. |
 | Turn | Everything a Claude session does from one prompt until it stops and waits. |
+| Working copy | A separate copy of the Folder, on a Git branch of its own, where one Claude session works. |

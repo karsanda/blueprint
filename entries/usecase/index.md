@@ -29,6 +29,7 @@ The MVP is the six use cases below. We build them slice by slice, in this order:
 - [Talk to Claude in a pane](blueprint/talk_to_claude_in_a_pane.md)
 - [Know when Claude needs me](blueprint/know_when_claude_needs_me.md)
 - [Run several Claude sessions](blueprint/run_several_claude_sessions.md)
+- [Give a session its own working copy](blueprint/give_a_session_its_own_working_copy.md) (after the MVP)
 
 ## shell
 

@@ -17,6 +17,7 @@ rectangle Blueprint [[../system/blueprint.md]] {
   usecase "Run commands in a shell pane" as Shell [[../usecase/blueprint/run_commands_in_a_shell_pane.md]]
   usecase "Arrange my panes" as Arrange [[../usecase/blueprint/arrange_my_panes.md]]
   usecase "Review what Claude changed" as Review [[../usecase/blueprint/review_what_claude_changed.md]]
+  usecase "Give a session its own working copy" as Copy [[../usecase/blueprint/give_a_session_its_own_working_copy.md]]
 }
 
 actor "Claude Code" as ClaudeCode
@@ -29,8 +30,10 @@ Developer --> Know
 Developer --> Shell
 Developer --> Arrange
 Developer --> Review
+Developer --> Copy
 
 Several ..> Talk : <<include>>
+Copy ..> Several : <<extend>>
 
 Several -- ClaudeCode
 Talk -- ClaudeCode
@@ -38,6 +41,8 @@ Know -- ClaudeCode
 Know -- OS
 Shell -- OS
 Review -- Git
+Copy -- ClaudeCode
+Copy -- Git
 
 ' Hidden links fix the supporting actors' order, so no lines cross.
 ClaudeCode -[hidden]- OS

@@ -64,7 +64,7 @@ Test cases:
 
 ## Known gaps
 
-- All sessions share one Folder. Separate working copies per session come after the MVP.
+- All sessions share one Folder. [Give a session its own working copy](give_a_session_its_own_working_copy.md) is drafted for after the MVP.
 - While Claude Code runs a command for one session, another session's changes also count as the first session's.
 - An overlap warning stays until one of the two sessions closes or restarts.
 
