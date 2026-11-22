@@ -14,13 +14,17 @@ interface Request {
   tabId: string
   name: string
   reason: Reason
+  /** The body of the window that holds the tab, so a pop-out asks in its own window. */
+  container: HTMLElement
 }
 
 const useRequest = create<{ request: Request | null }>(() => ({ request: null }))
 
 function ask(api: DockviewApi, tabId: string, reason: Reason): void {
-  const name = api.getPanel(tabId)?.title ?? tabId
-  useRequest.setState({ request: { api, tabId, name, reason } })
+  const panel = api.getPanel(tabId)
+  const name = panel?.title ?? tabId
+  const container = panel?.group.element.ownerDocument.body ?? document.body
+  useRequest.setState({ request: { api, tabId, name, reason, container } })
 }
 
 /**
@@ -63,7 +67,7 @@ export function CloseDialog() {
   const request = useRequest((s) => s.request)
   return (
     <Dialog.Root open={request !== null} onOpenChange={(open) => !open && dismiss()}>
-      <Dialog.Portal>
+      <Dialog.Portal container={request?.container}>
         {/* Above dockview's floating panes (z-index 997). */}
         <Dialog.Backdrop className="fixed inset-0 z-[1000] bg-black/40" />
         <Dialog.Popup className="fixed top-1/2 left-1/2 z-[1000] w-80 -translate-x-1/2 -translate-y-1/2 border border-bp-line bg-bp-sheet p-4 text-bp-ink shadow-lg outline-none">

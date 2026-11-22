@@ -44,6 +44,17 @@ export function dockPane(api: DockviewApi, group: DockviewGroupPanel): void {
   else group.api.moveTo({ position: 'right' })
 }
 
+/** Opens a docked or floating pane in a window of its own. */
+function popOut(api: DockviewApi, group: DockviewGroupPanel): void {
+  void api.addPopoutGroup(group, { popoutUrl: 'popout.html' })
+}
+
+/** Docks a popped-out pane the way closing its window does: dockview puts it back where it was. */
+function dockPopout(group: DockviewGroupPanel): void {
+  const location = group.api.location
+  if (location.type === 'popout') location.getWindow().close()
+}
+
 /** Where a pane sits, kept current as it floats and docks; read on every render, so a header made anew is never stale. */
 function useLocation(group: DockviewGroupPanel): string {
   const subscribe = useCallback(
@@ -59,7 +70,10 @@ function useLocation(group: DockviewGroupPanel): string {
 const ITEM =
   'flex cursor-default items-center px-3 py-1.5 outline-none select-none data-[highlighted]:bg-bp-line-soft'
 
-/** The pane's menu, before zoom: Float a docked pane, Dock a floating one. */
+/**
+ * The pane's menu, before zoom: Float a docked pane, Pop out a docked or floating one, and Dock a floating
+ * or popped-out one. The menu opens in the window that holds the pane.
+ */
 export function PaneMenu({ containerApi, group }: IDockviewHeaderActionsProps) {
   const location = useLocation(group)
   return (
@@ -71,7 +85,7 @@ export function PaneMenu({ containerApi, group }: IDockviewHeaderActionsProps) {
       >
         <Ellipsis size={13} strokeWidth={1.75} />
       </Menu.Trigger>
-      <Menu.Portal>
+      <Menu.Portal container={group.element.ownerDocument.body}>
         {/* Above dockview's floating panes (z-index 997), which would otherwise catch the clicks. */}
         <Menu.Positioner align="end" sideOffset={2} className="z-[1000]">
           <Menu.Popup className="min-w-28 border border-bp-line bg-bp-sheet py-1 text-xs text-bp-ink shadow-lg outline-none">
@@ -80,8 +94,18 @@ export function PaneMenu({ containerApi, group }: IDockviewHeaderActionsProps) {
                 Float
               </Menu.Item>
             )}
+            {location !== 'popout' && (
+              <Menu.Item className={ITEM} onClick={() => popOut(containerApi, group)}>
+                Pop out
+              </Menu.Item>
+            )}
             {location === 'floating' && (
               <Menu.Item className={ITEM} onClick={() => dockPane(containerApi, group)}>
+                Dock
+              </Menu.Item>
+            )}
+            {location === 'popout' && (
+              <Menu.Item className={ITEM} onClick={() => dockPopout(group)}>
                 Dock
               </Menu.Item>
             )}

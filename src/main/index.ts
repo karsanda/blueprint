@@ -1,9 +1,11 @@
 import { basename, join } from 'node:path'
-import { app, BrowserWindow, dialog, Menu, screen, shell } from 'electron'
+import { pathToFileURL } from 'node:url'
+import { app, BrowserWindow, dialog, Menu, net, protocol, screen, shell, type WebContents } from 'electron'
 import type { WindowBounds } from '../shared/api'
 import { resolveFolder } from './folder'
 import { type IpcDeps, registerIpc } from './ipc'
 import { initialWindow, layoutFile, readLayout, writeLayout } from './layout/store'
+import { isPopoutUrl, rendererFile } from './protocol'
 import { NeedsYouNotifier } from './notify'
 import { createReviewDir } from './review/git'
 import { ReviewService } from './review/service'
@@ -34,13 +36,16 @@ function createWindow(start: ReturnType<typeof initialWindow>): BrowserWindow {
     if (start.maximized) win.maximize()
     win.show()
   })
-  // The window only ever shows Blueprint: a page it navigated to would get the terminal API.
-  // Links (such as OSC 8 links in terminal output) open in the Developer's browser instead.
-  win.webContents.on('will-navigate', (event) => event.preventDefault())
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    if (isWebUrl(url)) void shell.openExternal(url)
-    return { action: 'deny' }
-  })
+  // The only window Blueprint opens is a pane's pop-out page, guarded like the main window.
+  guardWindow(win.webContents, (url) => isPopoutUrl(url, win.webContents.getURL()))
+  // A pop-out window loads its own page, and nothing after it.
+  win.webContents.on('did-create-window', (child, { url: page }) =>
+    guardWindow(
+      child.webContents,
+      () => false,
+      (url) => url === page,
+    ),
+  )
   if (!app.isPackaged) {
     win.webContents.on('before-input-event', (event, input) => {
       if (input.type === 'keyDown' && input.key === 'F12') {
@@ -51,14 +56,44 @@ function createWindow(start: ReturnType<typeof initialWindow>): BrowserWindow {
   }
   const devUrl = process.env['ELECTRON_RENDERER_URL']
   if (!app.isPackaged && devUrl) void win.loadURL(devUrl)
-  else void win.loadFile(join(__dirname, '../renderer/index.html'))
+  else void win.loadURL('blueprint://app/index.html')
   return win
 }
+
+/**
+ * Keeps a window on Blueprint's page: a page it navigated to would get the terminal API. It navigates
+ * only where `mayNavigate` allows. Links (such as OSC 8 links in terminal output) open in the Developer's
+ * browser instead, and no window opens unless `mayOpen` allows its URL.
+ */
+function guardWindow(
+  contents: WebContents,
+  mayOpen: (url: string) => boolean,
+  mayNavigate: (url: string) => boolean = () => false,
+): void {
+  contents.on('will-navigate', (event) => {
+    if (!mayNavigate(event.url)) event.preventDefault()
+  })
+  contents.setWindowOpenHandler(({ url }) => {
+    if (mayOpen(url)) return { action: 'allow', overrideBrowserWindowOptions: { backgroundColor: '#163b6a' } }
+    if (isWebUrl(url)) void shell.openExternal(url)
+    return { action: 'deny' }
+  })
+}
+
+// dockview refuses to pop a pane out of a `file:` page, so the renderer is served from blueprint://app/.
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'blueprint', privileges: { standard: true, secure: true, supportFetchAPI: true } },
+])
 
 // No app menu: its shortcuts (Ctrl+W closes, Ctrl+R reloads) would take keys from the terminals.
 Menu.setApplicationMenu(null)
 
 void app.whenReady().then(async () => {
+  const rendererDir = join(__dirname, '../renderer')
+  protocol.handle('blueprint', (request) => {
+    const file = rendererFile(rendererDir, request.url)
+    return file ? net.fetch(pathToFileURL(file).toString()) : new Response(null, { status: 404 })
+  })
   const folder = resolveFolder(process.argv, { packaged: app.isPackaged, cwd: process.cwd() })
   // The window is created after the listener and settings file exist, so every handler is
   // there before the renderer loads.
@@ -182,8 +217,8 @@ function keepWindowBounds(
 
 function isWebUrl(url: string): boolean {
   try {
-    const { protocol } = new URL(url)
-    return protocol === 'https:' || protocol === 'http:'
+    const { protocol: scheme } = new URL(url)
+    return scheme === 'https:' || scheme === 'http:'
   } catch {
     return false
   }

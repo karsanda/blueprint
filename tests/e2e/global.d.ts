@@ -19,5 +19,7 @@ declare global {
     dragData?: DataTransfer
     /** Every review state main sent since a test called watchReview. */
     reviewStates?: ReviewState[]
+    /** Calls a test's wrapper of a pop-out window's focus saw, in popout.spec.ts. */
+    focusCalls?: number
   }
 }

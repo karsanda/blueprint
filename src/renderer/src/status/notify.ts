@@ -8,6 +8,9 @@ export function focusTab(api: DockviewApi, tabId: string): void {
   if (!panel) return
   if (api.hasMaximizedGroup() && !panel.group.api.isMaximized()) api.exitMaximizedGroup()
   panel.api.setActive()
+  // A session in a pop-out window brings that window forward.
+  const location = panel.group.api.location
+  if (location.type === 'popout') location.getWindow().focus()
   // The pane is hidden until dockview has laid out again, and a hidden terminal cannot take focus.
   requestAnimationFrame(() => findSession(tabId)?.term.focus())
 }
