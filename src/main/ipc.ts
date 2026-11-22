@@ -86,6 +86,7 @@ export function registerIpc(win: BrowserWindow, deps: IpcDeps, userData: string)
   })
 
   ipcMain.on('clipboard:write', (_e, text: string) => clipboard.writeText(text))
+  ipcMain.handle('clipboard:read', async (): Promise<string> => clipboard.readText())
 }
 
 async function startTerminal(deps: IpcDeps, req: StartRequest): Promise<StartResult> {

@@ -7,6 +7,7 @@ import type { WindowBounds } from '../shared/api'
 import { detachedArgs, devUserData, shouldDetach } from './detach'
 import { loginEnvironment, mergeEnvironment, needsLoginEnvironment } from './environment'
 import { resolveFolder } from './folder'
+import { macMenuTemplate } from './menu'
 import { type IpcDeps, registerIpc } from './ipc'
 import { initialWindow, layoutFile, readLayout, writeLayout } from './layout/store'
 import { isPopoutUrl, rendererFile } from './protocol'
@@ -107,8 +108,9 @@ protocol.registerSchemesAsPrivileged([
   { scheme: 'blueprint', privileges: { standard: true, secure: true, supportFetchAPI: true } },
 ])
 
-// No app menu: its shortcuts (Ctrl+W closes, Ctrl+R reloads) would take keys from the terminals.
-Menu.setApplicationMenu(null)
+// No app menu on Ubuntu: its shortcuts (Ctrl+W closes, Ctrl+R reloads) would take keys from the terminals.
+// macOS gets a small standard one, for Cmd+C, Cmd+V and Cmd+Q.
+Menu.setApplicationMenu(process.platform === 'darwin' ? Menu.buildFromTemplate(macMenuTemplate()) : null)
 
 void app.whenReady().then(async () => {
   const rendererDir = join(__dirname, '../renderer')

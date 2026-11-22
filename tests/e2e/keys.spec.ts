@@ -39,12 +39,37 @@ test('Ctrl+Shift+C copies the selection', async () => {
 
 test('Ctrl+W and Ctrl+R reach the program', async () => {
   const { app, page, log } = await launch()
-  expect(await app.evaluate(({ Menu }) => Menu.getApplicationMenu() === null)).toBe(true)
+  // Ubuntu has no app menu; the macOS one has no Close Window or Reload, so Ctrl+W and Ctrl+R stay free there too.
+  if (process.platform !== 'darwin') {
+    expect(await app.evaluate(({ Menu }) => Menu.getApplicationMenu() === null)).toBe(true)
+  }
   await expect.poll(() => probeText(page, 'claude-1')).toContain('claude ready')
   await typeInto(page, 'claude-1', 'a')
   await page.keyboard.press('Control+W')
   await page.keyboard.press('Control+R')
   await expect.poll(() => readLog(log, 'claude.input')).toBe('a\x17\x12')
   expect(app.windows().length).toBe(1)
+  await app.close()
+})
+
+test('Cmd+V pastes into a terminal on macOS', async () => {
+  test.skip(process.platform !== 'darwin', 'Cmd+V and the Edit menu are macOS only')
+  const { app, page, log } = await launch()
+  await expect.poll(() => probeText(page, 'shell-1')).toContain('fake-shell ready')
+  await keepingClipboard(app, async () => {
+    await app.evaluate(({ clipboard }) => clipboard.writeText('echo cmd pasted'))
+    await probeCall(page, 'focus', 'shell-1')
+    // What the Edit menu's Paste item, and so Cmd+V, does.
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.webContents.paste())
+    await expect.poll(() => readLog(log, 'fake-shell.input')).toBe('echo cmd pasted')
+  })
+  await app.close()
+})
+
+test('the macOS menu is installed', async () => {
+  test.skip(process.platform !== 'darwin', 'Ubuntu has no app menu')
+  const { app } = await launch()
+  const labels = await app.evaluate(({ Menu }) => Menu.getApplicationMenu()?.items.map((i) => i.label) ?? [])
+  expect(labels).toEqual(['Blueprint', 'Edit', 'Window'])
   await app.close()
 })

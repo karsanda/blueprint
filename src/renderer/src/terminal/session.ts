@@ -49,6 +49,8 @@ export class TerminalSession {
       scrollback: 10_000,
       allowProposedApi: true,
       theme: xtermTheme,
+      // On macOS Option acts as Alt, so the shell's Alt bindings (fzf's Alt+C) work as on Ubuntu.
+      macOptionIsMeta: window.blueprint.platform === 'darwin',
     })
     this.term.loadAddon(this.fit)
     this.term.attachCustomKeyEventHandler((e) => {
@@ -57,8 +59,12 @@ export class TerminalSession {
         const selection = this.term.getSelection()
         if (selection) window.blueprint.writeClipboard(selection)
       }
-      // Paste is Chromium's own Ctrl+Shift+V and Shift+Insert: its paste event reaches xterm,
-      // which adds bracketed-paste marks when the program asks. Handling it here would paste twice.
+      // On Linux, paste is Chromium's own Ctrl+Shift+V and Shift+Insert: its paste event reaches xterm,
+      // which adds bracketed-paste marks when the program asks. Handling it here would paste twice there.
+      // Chromium does not paste on them on macOS, so Blueprint pastes there itself, through xterm.
+      if (action === 'paste' && window.blueprint.platform === 'darwin') {
+        void window.blueprint.readClipboard().then((text) => this.term.paste(text))
+      }
       return action === null
     })
     // onKey, not onData: onData also carries focus reports, mouse reports and the terminal's answers.
