@@ -214,7 +214,22 @@ void app.whenReady().then(async () => {
     cleanUp()
     app.quit()
   })
-  app.on('before-quit', cleanUp)
+  // Quit (Cmd+Q on macOS) closes the windows in the system's order, pop-outs first there. A pop-out that
+  // closes docks its pane back before the main window saves the layout, so the pop-out would not come back.
+  // So the main window closes first; it closes its pop-outs, and the last window to close quits.
+  let closingMain = false
+  app.on('before-quit', (event) => {
+    if (!closingMain && win && !win.isDestroyed() && BrowserWindow.getAllWindows().length > 1) {
+      closingMain = true
+      event.preventDefault()
+      win.once('closed', () => {
+        for (const other of BrowserWindow.getAllWindows()) other.close()
+      })
+      win.close()
+      return
+    }
+    cleanUp()
+  })
 })
 
 /** Saves the window's normal bounds 500 ms after the last move or resize, and at once on close. */

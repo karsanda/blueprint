@@ -28,6 +28,12 @@ function closeAction(page: Page, title: string): Locator {
   return tab(page, title).locator('.dv-default-tab-action')
 }
 
+/** Clicks a tab's close action as the Developer does: hovering the tab first, which shows it on an inactive tab. */
+async function clickClose(page: Page, title: string): Promise<void> {
+  await tab(page, title).hover()
+  await closeAction(page, title).click()
+}
+
 function alive(pid: number): boolean {
   try {
     process.kill(pid, 0)
@@ -51,7 +57,7 @@ async function rename(page: Page, from: string, to: string): Promise<void> {
   await tab(page, from).locator('.dv-default-tab-content, .bp-tab-name').first().dblclick()
   const field = page.getByRole('textbox', { name: 'Shell name' })
   await expect(field).toBeFocused()
-  await page.keyboard.press('Control+A')
+  await page.keyboard.press('ControlOrMeta+A')
   await page.keyboard.type(to)
   await page.keyboard.press('Enter')
   await expect(field).toHaveCount(0)
@@ -119,7 +125,7 @@ test('closing a shell that runs a program asks first', async () => {
     await page.keyboard.press('Enter')
     await expect.poll(() => page.evaluate(() => window.blueprint.foregroundProgram('shell-2'))).toBe('sleep')
 
-    await closeAction(page, 'Shell 2').click()
+    await clickClose(page, 'Shell 2')
     const dialog = page.getByRole('dialog')
     await expect(dialog.getByText('Close Shell 2?')).toBeVisible()
     await expect(dialog.getByText('It is still running sleep.')).toBeVisible()
@@ -128,7 +134,7 @@ test('closing a shell that runs a program asks first', async () => {
     await expect(tab(page, 'Shell 2')).toBeVisible()
     expect(running('sleep 3071')).toBe(true)
 
-    await closeAction(page, 'Shell 2').click()
+    await clickClose(page, 'Shell 2')
     await page.getByRole('dialog').getByRole('button', { name: 'Close shell' }).click()
     await expect(tab(page, 'Shell 2')).toHaveCount(0)
     await expect.poll(() => running('sleep 3071'), { timeout: 5000 }).toBe(false)
@@ -143,7 +149,7 @@ test('a shell at its prompt closes at once', async () => {
   await openShell(page, 'Shell', 'shell-2')
   await expect.poll(() => startsOf(log).length).toBe(2)
   const pid = startsOf(log)[1].pid
-  await closeAction(page, 'Shell 2').click()
+  await clickClose(page, 'Shell 2')
   await expect(tab(page, 'Shell 2')).toHaveCount(0)
   await expect(page.getByRole('dialog')).toHaveCount(0)
   await expect.poll(() => alive(pid)).toBe(false)
@@ -156,7 +162,7 @@ test('a shell that exited closes at once', async () => {
   await openShell(page, 'Shell', 'shell-2')
   await page.keyboard.type('~')
   await expect(page.locator('[data-tab="shell-2"]').getByText('Shell exited (code 3).')).toBeVisible()
-  await closeAction(page, 'Shell 2').click()
+  await clickClose(page, 'Shell 2')
   await expect(tab(page, 'Shell 2')).toHaveCount(0)
   await expect(page.getByRole('dialog')).toHaveCount(0)
   await app.close()
@@ -169,7 +175,7 @@ test('the last shell has no close action', async () => {
   await openShell(page, 'Shell', 'shell-2')
   await expect(closeAction(page, 'Shell')).toHaveCount(1)
   await expect(closeAction(page, 'Shell 2')).toHaveCount(1)
-  await closeAction(page, 'Shell').click()
+  await clickClose(page, 'Shell')
   await expect(tab(page, 'Shell')).toHaveCount(0)
   await expect(page.locator('.dv-tab', { hasText: /Shell/ })).toHaveCount(1)
   await expect(closeAction(page, 'Shell 2')).toHaveCount(0)
@@ -180,7 +186,7 @@ test('a closed shell number is not given to the next shell', async () => {
   const { app, page } = await launch()
   await expect.poll(() => probeText(page, 'shell-1')).toContain('fake-shell ready')
   await openShell(page, 'Shell', 'shell-2')
-  await closeAction(page, 'Shell 2').click()
+  await clickClose(page, 'Shell 2')
   await expect(tab(page, 'Shell 2')).toHaveCount(0)
   await openShell(page, 'Shell', 'shell-3')
   await expect(tab(page, 'Shell 3')).toBeVisible()
@@ -192,7 +198,7 @@ test('closing the first shell keeps the saved layout', async () => {
   const first = await launch()
   await expect.poll(() => probeText(first.page, 'shell-1')).toContain('fake-shell ready')
   await openShell(first.page, 'Shell', 'shell-2')
-  await closeAction(first.page, 'Shell').click()
+  await clickClose(first.page, 'Shell')
   await expect(tab(first.page, 'Shell')).toHaveCount(0)
   await first.page.waitForTimeout(1000)
   await first.app.close()
@@ -215,7 +221,7 @@ test('closing a shell puts the keyboard in the tab that takes its place', async 
   await expect.poll(() => probeText(page, 'shell-1')).toContain('fake-shell ready')
   await openShell(page, 'Shell', 'shell-2')
   await expect(page.locator('[data-tab="shell-2"] .xterm-helper-textarea')).toBeFocused()
-  await closeAction(page, 'Shell 2').click()
+  await clickClose(page, 'Shell 2')
   await expect(tab(page, 'Shell 2')).toHaveCount(0)
   await expect(page.locator('[data-tab="shell-1"] .xterm-helper-textarea')).toBeFocused()
   await app.close()

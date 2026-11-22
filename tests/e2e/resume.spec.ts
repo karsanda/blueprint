@@ -20,6 +20,8 @@ function sessionOf(log: string, stem: string): string {
 
 /** The Developer sends a prompt in a tab, and Blueprint hears it. */
 async function prompt(page: Page, log: string, tabId: string, stem: string, keys = 'p'): Promise<void> {
+  // Keys typed before the program is up are lost.
+  await expect.poll(() => probeText(page, tabId)).toContain('claude ready')
   const before = readLog(log, `${stem}.hooks`).split('UserPromptSubmit 204').length
   await typeInto(page, tabId, keys)
   await expect

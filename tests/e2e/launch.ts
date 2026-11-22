@@ -48,7 +48,10 @@ function noClaudePath(): string {
 const headless =
   process.env['BLUEPRINT_E2E_HEADED'] === '1' || process.platform !== 'linux'
     ? []
-    : ['--ozone-platform=headless', '--ozone-override-screen-size=1920,1080']
+    : [
+        '--ozone-platform=headless',
+        `--ozone-override-screen-size=${process.env['BLUEPRINT_E2E_SCREEN'] ?? '1920,1080'}`,
+      ]
 const noSessionBus = 'unix:path=/nonexistent/blueprint-e2e-bus'
 
 /** Where a run's temp dirs go: the run directory its global setup made, or the system's. */
@@ -147,7 +150,20 @@ export function gitFolder(): string {
   const git = (...args: string[]): void => {
     execFileSync(
       'git',
-      ['-c', 'user.name=t', '-c', 'user.email=t@example.invalid', '-c', 'commit.gpgsign=false', ...args],
+      [
+        '-c',
+        'user.name=t',
+        '-c',
+        'user.email=t@example.invalid',
+        '-c',
+        'commit.gpgsign=false',
+        // No maintenance in the background: its lock file would come and go under a test that compares objects.
+        '-c',
+        'maintenance.auto=false',
+        '-c',
+        'gc.auto=0',
+        ...args,
+      ],
       { cwd: dir, stdio: 'ignore', env },
     )
   }
