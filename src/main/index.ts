@@ -1,8 +1,10 @@
 import { userInfo } from 'node:os'
 import { basename, join } from 'node:path'
+import { spawn } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
 import { app, BrowserWindow, dialog, Menu, net, protocol, screen, shell, type WebContents } from 'electron'
 import type { WindowBounds } from '../shared/api'
+import { detachedArgs, devUserData, shouldDetach } from './detach'
 import { loginEnvironment, mergeEnvironment, needsLoginEnvironment } from './environment'
 import { resolveFolder } from './folder'
 import { type IpcDeps, registerIpc } from './ipc'
@@ -81,6 +83,24 @@ function guardWindow(
     return { action: 'deny' }
   })
 }
+
+// `blueprint <folder>` from a terminal: hand over to a detached copy and give the prompt back.
+if (shouldDetach({ packaged: app.isPackaged, stdinIsTTY: process.stdin.isTTY, env: process.env })) {
+  spawn(process.execPath, detachedArgs(process.argv, process.cwd()), {
+    detached: true,
+    stdio: 'ignore',
+    env: { ...process.env, BLUEPRINT_DETACHED: '1' },
+  }).unref()
+  process.exit(0)
+}
+
+// `pnpm dev` keeps its settings apart from the installed app's.
+const devData = devUserData({
+  packaged: app.isPackaged,
+  name: app.getName(),
+  appData: app.getPath('appData'),
+})
+if (devData) app.setPath('userData', devData)
 
 // dockview refuses to pop a pane out of a `file:` page, so the renderer is served from blueprint://app/.
 protocol.registerSchemesAsPrivileged([
