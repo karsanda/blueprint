@@ -67,19 +67,20 @@ export function openTab(api: DockviewApi, group: DockviewGroupPanel, kind: Termi
   focusTab(api, id)
 }
 
-/** Closes a Claude tab: its pane, its terminal view, its program, and its status. */
-export function closeClaudeSession(api: DockviewApi, tabId: string): void {
-  // The last Claude tab stays.
-  if (api.panels.filter((p) => isClaudeTab(p.id)).length <= 1) return
+/** Closes a Claude or shell tab: its pane, its terminal view, its program, and its status. */
+export function closeTab(api: DockviewApi, tabId: string): void {
+  const kind = tabKind(tabId)
+  // The last tab of each kind stays.
+  if (!kind || api.panels.filter((p) => tabKind(p.id) === kind).length <= 1) return
   noteUsed(tabId)
   const panel = api.getPanel(tabId)
   const hadFocus = panel?.api.isActive === true
   if (panel) api.removePanel(panel)
   findSession(tabId)?.dispose()
   window.blueprint.stopTerminal(tabId)
-  useClaudeStatus.getState().set(tabId, undefined)
+  if (kind === 'claude') useClaudeStatus.getState().set(tabId, undefined)
   useTerminalStatus.getState().clear(tabId)
-  // The Claude tab that takes its place gets the keyboard.
+  // The terminal tab that takes its place gets the keyboard.
   const next = hadFocus ? api.activePanel : undefined
-  if (next && isClaudeTab(next.id)) focusTab(api, next.id)
+  if (next && tabKind(next.id)) focusTab(api, next.id)
 }

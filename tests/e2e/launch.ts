@@ -23,6 +23,8 @@ export interface LaunchOptions {
   args?: string[]
   /** Reuse the home of an earlier launch, and with it the user data. Defaults to a fresh one. */
   home?: string
+  /** The Developer's shell (`SHELL`). Defaults to the fake shell. */
+  shell?: string
 }
 
 const root = resolve(__dirname, '../..')
@@ -65,7 +67,7 @@ export async function launch(opts: LaunchOptions = {}): Promise<Launched> {
     XDG_CONFIG_HOME: join(home, '.config'),
     PATH:
       opts.path === 'no-claude' ? noClaudePath() : `${fixtureBin}${delimiter}${process.env['PATH'] ?? ''}`,
-    SHELL: join(fixtureBin, 'fake-shell'),
+    SHELL: opts.shell ?? join(fixtureBin, 'fake-shell'),
     BLUEPRINT_E2E: '1',
     BLUEPRINT_TEST_LOG: log,
     DBUS_SESSION_BUS_ADDRESS: noSessionBus,

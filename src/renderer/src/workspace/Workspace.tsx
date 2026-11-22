@@ -8,6 +8,7 @@ import {
   type IDockviewPanelHeaderProps,
 } from 'dockview-react'
 import { useEffect, useRef, useState } from 'react'
+import type { TerminalKind } from '../../../shared/api'
 import { ChangesPanel } from '../review/ChangesPanel'
 import { useShallow } from 'zustand/react/shallow'
 import { useReview } from '../review/store'
@@ -23,7 +24,7 @@ import { addDefaultPanels } from './defaultLayout'
 import { installLayoutSaving, restoreLayout } from './persist'
 import { CloseDialog, requestClose } from './CloseDialog'
 import { GroupActions } from './GroupActions'
-import { isClaudeTab, tabKind } from './sessions'
+import { tabKind } from './sessions'
 
 const blueprintTheme: DockviewTheme = { name: 'blueprint', className: 'dockview-theme-blueprint', gap: 6 }
 const components = {
@@ -32,17 +33,17 @@ const components = {
   difference: DifferencePanel,
 }
 
-/** How many Claude tabs are open, kept current as tabs come and go. */
-function useClaudeTabCount(api: DockviewApi): number {
-  const count = () => api.panels.filter((p) => isClaudeTab(p.id)).length
+/** How many terminal tabs of `kind` are open (none for another tab), kept current as tabs come and go. */
+function useTabCount(api: DockviewApi, kind: TerminalKind | undefined): number {
+  const count = () => (kind ? api.panels.filter((p) => tabKind(p.id) === kind).length : 0)
   const [n, setN] = useState(count)
   useEffect(() => {
     const update = () => setN(count())
     update()
     const subs = [api.onDidAddPanel(update), api.onDidRemovePanel(update)]
     return () => subs.forEach((sub) => sub.dispose())
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- count only reads api
-  }, [api])
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- count only reads api and kind
+  }, [api, kind])
   return n
 }
 
@@ -102,15 +103,14 @@ function NameField({
 }
 
 /**
- * A Claude tab has a close action (button and middle-click) while another Claude tab is open;
- * no other tab has one, and the last Claude tab stays. Double-clicking a Claude or shell tab's title
- * renames it.
+ * A Claude or shell tab has a close action (button and middle-click) while another tab of its kind is
+ * open; no other tab has one, and the last of each kind stays. Double-clicking a Claude or shell tab's
+ * title renames it.
  */
 function BlueprintTab(props: IDockviewPanelHeaderProps) {
-  const claudeTabs = useClaudeTabCount(props.containerApi)
   const kind = tabKind(props.api.id)
   const isClaude = kind === 'claude'
-  const closable = isClaude && claudeTabs > 1
+  const closable = useTabCount(props.containerApi, kind) > 1
   const [editing, setEditing] = useState(false)
   const rename = (value: string | null) => {
     setEditing(false)
