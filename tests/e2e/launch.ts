@@ -113,6 +113,11 @@ export async function probeSize(page: Page, tabId: string): Promise<{ cols: numb
   return page.evaluate(`(${probe.toString()})().size(${JSON.stringify(tabId)})`)
 }
 
+/** Frames a tab's terminal drew since the first call for it, which starts the count at 0. */
+export async function probeRenders(page: Page, tabId: string): Promise<number> {
+  return page.evaluate(`(${probe.toString()})().renders(${JSON.stringify(tabId)})`)
+}
+
 export async function probeCall(page: Page, method: 'focus' | 'selectAll', tabId: string): Promise<void> {
   await page.evaluate(`(${probe.toString()})().${method}(${JSON.stringify(tabId)})`)
 }

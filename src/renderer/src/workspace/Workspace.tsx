@@ -23,8 +23,10 @@ import { TerminalPanel } from '../terminal/TerminalPanel'
 import { addDefaultPanels } from './defaultLayout'
 import { installLayoutSaving, restoreLayout } from './persist'
 import { CloseDialog, requestClose } from './CloseDialog'
+import { installKeys } from './commands'
 import { GroupActions } from './GroupActions'
 import { tabKind } from './sessions'
+import { useWorkspaceApi } from './workspaceApi'
 
 const blueprintTheme: DockviewTheme = { name: 'blueprint', className: 'dockview-theme-blueprint', gap: 6 }
 const components = {
@@ -125,8 +127,10 @@ function BlueprintTab(props: IDockviewPanelHeaderProps) {
         // activation event, so put the keyboard back in its terminal once that has happened. A press on the
         // close action is left alone.
         if (editing || (e.target instanceof Element && e.target.closest('.dv-default-tab-action'))) return
-        requestAnimationFrame(() => {
-          if (document.activeElement?.classList.contains('bp-tab-name')) return
+        // The tab's own window: in a pop-out, focus and frames are that window's.
+        const doc = e.currentTarget.ownerDocument
+        ;(doc.defaultView ?? window).requestAnimationFrame(() => {
+          if (doc.activeElement?.classList.contains('bp-tab-name')) return
           findSession(props.api.id)?.term?.focus()
         })
       }}
@@ -177,6 +181,8 @@ export function Workspace() {
             installTitle(e.api)
             installReviewFollow(e.api)
             installNotifications(e.api)
+            installKeys(e.api)
+            useWorkspaceApi.setState({ api: e.api })
           })()
         }}
       />

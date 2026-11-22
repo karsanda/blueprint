@@ -83,7 +83,7 @@ export class TerminalSession {
   attach(el: HTMLElement): void {
     this.host = el
     if (!this.opened) {
-      this.term.open(el)
+      this.openInMainWindow(el)
       this.loadRenderers()
       this.opened = true
     } else if (this.term.element && this.term.element.parentElement !== el) {
@@ -152,6 +152,24 @@ export class TerminalSession {
     if (this.term.cols !== cols || this.term.rows !== rows) {
       window.blueprint.resize(this.tabId, this.term.cols, this.term.rows)
     }
+  }
+
+  /**
+   * Opens the terminal against the main window, wherever `el` is. xterm draws and parses with the window
+   * it was opened in, and draws a frame only when none is waiting: a frame asked of a pop-out window that
+   * then closes never comes, and the terminal would never draw again. The main window lasts as long as
+   * Blueprint, and the terminal's element can live in any window.
+   */
+  private openInMainWindow(el: HTMLElement): void {
+    if (el.ownerDocument === document) {
+      this.term.open(el)
+      return
+    }
+    const staging = document.createElement('div')
+    document.body.append(staging)
+    this.term.open(staging)
+    if (this.term.element) el.append(this.term.element)
+    staging.remove()
   }
 
   /** Ligatures first, so they reach WebGL's glyph cache. Without WebGL, xterm keeps its DOM renderer. */

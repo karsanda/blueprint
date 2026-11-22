@@ -3,6 +3,7 @@ import { Plus, SquareTerminal } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { TerminalKind } from '../../../shared/api'
 import { openTab, tabKind } from './sessions'
+import { PaneMenu } from './PaneMenu'
 import { ZoomAction } from './ZoomAction'
 
 /** Whether this group holds a terminal tab of `kind`, kept current as tabs come and go. */
@@ -47,7 +48,7 @@ function NewTabAction({
 
 /**
  * The actions at the right of a group's tabs: a new shell where the group holds a shell, a new Claude
- * session where it holds one, then zoom.
+ * session where it holds one, the pane menu, then zoom.
  */
 export function GroupActions(props: IDockviewHeaderActionsProps) {
   const holdsShell = useHolds(props, 'shell')
@@ -67,6 +68,7 @@ export function GroupActions(props: IDockviewHeaderActionsProps) {
           <Plus size={13} strokeWidth={1.75} />
         </NewTabAction>
       )}
+      <PaneMenu {...props} />
       <ZoomAction {...props} />
     </div>
   )
