@@ -83,6 +83,7 @@ Test cases:
 - Files that Claude Code changes through tools from other programs show as changed outside Claude.
 - Files stored with Git LFS are not listed.
 - In a very large Folder, Claude's first changes after a start or a prompt may not be listed.
+- A Git clean-up can remove content that only the Folder's repository kept. A range comparing with that content then stops listing Changes.
 
 ## Terms
 
