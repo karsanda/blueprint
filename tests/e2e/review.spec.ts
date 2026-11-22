@@ -202,6 +202,10 @@ test('the review stops refreshing while the Changes pane is hidden', async () =>
   })
   await typeInto(page, 'claude-1', 'p')
   await expect.poll(() => readLog(log, 'claude.hooks')).toContain('UserPromptSubmit 204')
+  // The prompt refreshes the review even while the pane is hidden. Its look at the Folder may come after the
+  // hook's reply, so the file changes only once that refresh has sent its list.
+  const states = () => page.evaluate(() => (window.reviewStates ?? []).map((s) => s.kind))
+  await expect.poll(states).toContain('changes')
   writeFileSync(join(folder, 'README.md'), 'changed while hidden\n')
   await page.waitForTimeout(3000)
   const listed = () =>
