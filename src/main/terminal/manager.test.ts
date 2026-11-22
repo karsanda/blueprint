@@ -80,6 +80,12 @@ test('a shell runs a command in its foreground until it ends', async () => {
   expect(manager.foreground('none')).toBeNull()
 })
 
+test('a pipeline stays in the foreground after its first command ends', async () => {
+  manager.start('t', { file: '/bin/sh', args: ['-i'], cwd: tmp, env: terminalEnv(process.env) }, 80, 24)
+  manager.write('t', 'true | sleep 5\n')
+  await expect.poll(() => manager.foreground('t'), { timeout: 3000 }).toBe('sleep')
+})
+
 test('clamps an unknown size', async () => {
   manager.start('t', sh('stty size > size; sleep 5'), 0, Number.NaN)
   await expect.poll(() => read('size').trim(), { timeout: 3000 }).toBe('2 2')

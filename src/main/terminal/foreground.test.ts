@@ -42,4 +42,21 @@ describe('foregroundProgram', () => {
     const noComm = files({ '/proc/100/stat': '100 (zsh) S 1 100 100 34816 205 4194560' })
     expect(foregroundProgram(100, noComm)).toBeNull()
   })
+
+  it('a pipeline whose first command ended names a program still in its group', () => {
+    const read = files({
+      '/proc/100/stat': '100 (zsh) S 1 100 100 34816 205 4194560',
+      // 205 led the group and has ended; 206 is still in group 205, in the shell's session 100.
+      '/proc/206/stat': '206 (less) S 100 205 100 34816 205 0',
+      '/proc/206/comm': 'less\n',
+      '/proc/207/stat': '207 (less) S 1 205 300 0 -1 0',
+      '/proc/207/comm': 'other\n',
+    })
+    expect(foregroundProgram(100, read, () => ['1', '100', '207', '206', 'self'])).toBe('less')
+  })
+
+  it('a foreground group with no process left runs nothing', () => {
+    const read = files({ '/proc/100/stat': '100 (zsh) S 1 100 100 34816 205 4194560' })
+    expect(foregroundProgram(100, read, () => ['1', '100'])).toBeNull()
+  })
 })

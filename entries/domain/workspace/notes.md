@@ -31,7 +31,8 @@ Code-level detail for [Arrange my panes](../../usecase/blueprint/arrange_my_pane
     - Main reads the terminal's foreground process group, field 8 (`tpgid`) of `/proc/<shell pid>/stat`.
     - When that is the shell's own pid, the shell sits at its prompt, and the tab closes at once.
     - Otherwise Blueprint asks first, in its close dialog: "Close Shell 2?", "It is still running <program>.", with "Keep it" and "Close shell". The program's name is `/proc/<tpgid>/comm`.
-    - A shell that exited, or whose foreground cannot be read, closes at once.
+    - The group's leader is the first command of a pipeline. It may end while the rest still runs, as in `cat log | less`, and then its `/proc` entry is gone. The program is then the first process left in that group and in the shell's session, from each `/proc/<pid>/stat`. When none is left, the job has ended.
+    - A shell that exited, or whose `/proc/<pid>/stat` cannot be read, closes at once.
     - Closing ends the tab's terminal, which hangs up the programs in it.
   - Why the foreground process group and not the program's name: the shell's own name cannot be compared reliably. A `#!/usr/bin/env node` script reads as `node`, and a login shell as `-zsh`. Checked in a pseudo-terminal with `/bin/sh`, bash and zsh: `tpgid` is the shell's pid at the prompt, and `sleep`'s while `sleep 5` runs.
   - Restored layouts accept `shell-<n>` tabs (terminal, kind `shell`). See Remembering the layout.
