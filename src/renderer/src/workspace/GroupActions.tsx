@@ -1,14 +1,16 @@
 import type { IDockviewHeaderActionsProps } from 'dockview-react'
-import { Plus } from 'lucide-react'
+import { Plus, SquareTerminal } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { isClaudeTab, openClaudeSession } from './sessions'
+import type { TerminalKind } from '../../../shared/api'
+import { openTab, tabKind } from './sessions'
 import { ZoomAction } from './ZoomAction'
 
-/** Whether this group holds a Claude tab, kept current as tabs come and go. */
-function useHoldsClaude({ group, containerApi }: IDockviewHeaderActionsProps): boolean {
-  const [holds, setHolds] = useState(() => group.panels.some((p) => isClaudeTab(p.id)))
+/** Whether this group holds a terminal tab of `kind`, kept current as tabs come and go. */
+function useHolds({ group, containerApi }: IDockviewHeaderActionsProps, kind: TerminalKind): boolean {
+  const holds = () => group.panels.some((p) => tabKind(p.id) === kind)
+  const [held, setHeld] = useState(holds)
   useEffect(() => {
-    const update = () => setHolds(group.panels.some((p) => isClaudeTab(p.id)))
+    const update = () => setHeld(holds())
     update()
     const subs = [
       containerApi.onDidAddPanel(update),
@@ -16,25 +18,54 @@ function useHoldsClaude({ group, containerApi }: IDockviewHeaderActionsProps): b
       containerApi.onDidMovePanel(update),
     ]
     return () => subs.forEach((s) => s.dispose())
-  }, [group, containerApi])
-  return holds
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- holds only reads group and kind
+  }, [group, containerApi, kind])
+  return held
 }
 
-/** The actions at the right of a group's tabs: a new Claude session where the group holds one, then zoom. */
+function NewTabAction({
+  label,
+  onClick,
+  children,
+}: {
+  label: string
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      className="flex h-full items-center px-2 text-bp-muted hover:text-bp-ink"
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  )
+}
+
+/**
+ * The actions at the right of a group's tabs: a new shell where the group holds a shell, a new Claude
+ * session where it holds one, then zoom.
+ */
 export function GroupActions(props: IDockviewHeaderActionsProps) {
-  const holdsClaude = useHoldsClaude(props)
+  const holdsShell = useHolds(props, 'shell')
+  const holdsClaude = useHolds(props, 'claude')
   return (
     <div className="flex h-full items-center">
+      {holdsShell && (
+        <NewTabAction label="New shell" onClick={() => openTab(props.containerApi, props.group, 'shell')}>
+          <SquareTerminal size={13} strokeWidth={1.75} />
+        </NewTabAction>
+      )}
       {holdsClaude && (
-        <button
-          type="button"
-          aria-label="New Claude session"
-          title="New Claude session"
-          className="flex h-full items-center px-2 text-bp-muted hover:text-bp-ink"
-          onClick={() => openClaudeSession(props.containerApi, props.group)}
+        <NewTabAction
+          label="New Claude session"
+          onClick={() => openTab(props.containerApi, props.group, 'claude')}
         >
           <Plus size={13} strokeWidth={1.75} />
-        </button>
+        </NewTabAction>
       )}
       <ZoomAction {...props} />
     </div>

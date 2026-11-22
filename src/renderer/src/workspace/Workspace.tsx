@@ -23,7 +23,7 @@ import { addDefaultPanels } from './defaultLayout'
 import { installLayoutSaving, restoreLayout } from './persist'
 import { CloseDialog, requestClose } from './CloseDialog'
 import { GroupActions } from './GroupActions'
-import { isClaudeTab } from './sessions'
+import { isClaudeTab, tabKind } from './sessions'
 
 const blueprintTheme: DockviewTheme = { name: 'blueprint', className: 'dockview-theme-blueprint', gap: 6 }
 const components = {
@@ -65,8 +65,16 @@ function OverlapMark({ tabId }: { tabId: string }) {
   )
 }
 
-/** The name field a double-click opens in place of a Claude tab's title. */
-function NameField({ name, onDone }: { name: string; onDone: (name: string | null) => void }) {
+/** The name field a double-click opens in place of a terminal tab's title. */
+function NameField({
+  name,
+  label,
+  onDone,
+}: {
+  name: string
+  label: string
+  onDone: (name: string | null) => void
+}) {
   const done = useRef(false)
   const finish = (value: string | null) => {
     if (done.current) return
@@ -76,7 +84,7 @@ function NameField({ name, onDone }: { name: string; onDone: (name: string | nul
   return (
     <input
       className="bp-tab-name"
-      aria-label="Session name"
+      aria-label={label}
       defaultValue={name}
       // oxlint-disable-next-line jsx-a11y/no-autofocus -- the field opens on a double-click
       autoFocus
@@ -95,11 +103,13 @@ function NameField({ name, onDone }: { name: string; onDone: (name: string | nul
 
 /**
  * A Claude tab has a close action (button and middle-click) while another Claude tab is open;
- * no other tab has one, and the last Claude tab stays. Double-clicking a Claude tab's title renames it.
+ * no other tab has one, and the last Claude tab stays. Double-clicking a Claude or shell tab's title
+ * renames it.
  */
 function BlueprintTab(props: IDockviewPanelHeaderProps) {
   const claudeTabs = useClaudeTabCount(props.containerApi)
-  const isClaude = isClaudeTab(props.api.id)
+  const kind = tabKind(props.api.id)
+  const isClaude = kind === 'claude'
   const closable = isClaude && claudeTabs > 1
   const [editing, setEditing] = useState(false)
   const rename = (value: string | null) => {
@@ -120,12 +130,16 @@ function BlueprintTab(props: IDockviewPanelHeaderProps) {
           findSession(props.api.id)?.term?.focus()
         })
       }}
-      onDoubleClick={isClaude ? () => setEditing(true) : undefined}
+      onDoubleClick={kind ? () => setEditing(true) : undefined}
     >
       <StatusLight tabId={props.api.id} />
       <OverlapMark tabId={props.api.id} />
       {editing ? (
-        <NameField name={props.api.title ?? props.api.id} onDone={rename} />
+        <NameField
+          name={props.api.title ?? props.api.id}
+          label={isClaude ? 'Session name' : 'Shell name'}
+          onDone={rename}
+        />
       ) : (
         <DockviewDefaultTab
           {...props}

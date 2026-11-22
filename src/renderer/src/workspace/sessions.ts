@@ -1,42 +1,65 @@
 import type { DockviewApi, DockviewGroupPanel } from 'dockview-react'
+import type { TerminalKind } from '../../../shared/api'
 import { focusTab } from '../status/notify'
 import { useClaudeStatus } from '../status/store'
 import { findSession } from '../terminal/session'
 import { useTerminalStatus } from '../terminal/status'
 
-const CLAUDE_TAB = /^claude-(\d+)$/
+const TERMINAL_TAB = /^(claude|shell)-(\d+)$/
+const TITLE: Record<TerminalKind, string> = { claude: 'Claude', shell: 'Shell' }
 
-/**
- * The tab a new Claude session takes: one number past the highest open Claude tab and past every
- * number used earlier in this run, so a closed session's number is never reissued.
- */
-export function nextClaudeTab(ids: string[], highestUsed: number): { id: string; title: string } {
-  const open = ids.map((id) => Number(CLAUDE_TAB.exec(id)?.[1] ?? 0))
-  const n = Math.max(highestUsed, ...open) + 1
-  return { id: `claude-${n}`, title: `Claude ${n}` }
+/** The kind of terminal a tab id names: `claude-<n>` or `shell-<n>`; undefined for any other tab. */
+export function tabKind(id: string): TerminalKind | undefined {
+  const kind = TERMINAL_TAB.exec(id)?.[1]
+  return kind === 'claude' || kind === 'shell' ? kind : undefined
 }
 
-/** The highest Claude number this run has opened or closed, restored tabs included. */
-let highestUsed = 0
+/** A terminal tab's number, or 0 for a tab of another kind. */
+function numberOf(kind: TerminalKind, id: string): number {
+  const match = TERMINAL_TAB.exec(id)
+  return match?.[1] === kind ? Number(match[2]) : 0
+}
+
+/**
+ * The tab a new terminal of `kind` takes: one number past the highest open tab of that kind and past
+ * every number of that kind used earlier in this run, so a closed tab's number is never reissued.
+ */
+export function nextTab(
+  kind: TerminalKind,
+  ids: string[],
+  highestUsed: number,
+): { id: string; title: string } {
+  const n = Math.max(highestUsed, ...ids.map((id) => numberOf(kind, id))) + 1
+  return { id: `${kind}-${n}`, title: `${TITLE[kind]} ${n}` }
+}
+
+/** The highest number of each kind this run has opened or closed, restored tabs included. */
+const highestUsed: Record<TerminalKind, number> = { claude: 0, shell: 0 }
 function noteUsed(id: string): void {
-  highestUsed = Math.max(highestUsed, Number(CLAUDE_TAB.exec(id)?.[1] ?? 0))
+  const kind = tabKind(id)
+  if (kind) highestUsed[kind] = Math.max(highestUsed[kind], numberOf(kind, id))
 }
 
 export function isClaudeTab(id: string): boolean {
-  return CLAUDE_TAB.test(id)
+  return tabKind(id) === 'claude'
 }
 
-/** Opens a new Claude session as the active tab of `group`, with the cursor in it. */
-export function openClaudeSession(api: DockviewApi, group: DockviewGroupPanel): void {
-  const { id, title } = nextClaudeTab(
+export function isShellTab(id: string): boolean {
+  return tabKind(id) === 'shell'
+}
+
+/** Opens a new terminal of `kind` as the active tab of `group`, with the cursor in it. */
+export function openTab(api: DockviewApi, group: DockviewGroupPanel, kind: TerminalKind): void {
+  const { id, title } = nextTab(
+    kind,
     api.panels.map((p) => p.id),
-    highestUsed,
+    highestUsed[kind],
   )
   api.addPanel({
     id,
     component: 'terminal',
     title,
-    params: { kind: 'claude' },
+    params: { kind },
     renderer: 'always',
     position: { referenceGroup: group },
   })
