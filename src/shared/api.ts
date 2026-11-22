@@ -101,6 +101,8 @@ export interface BlueprintApi {
   startTerminal(req: StartRequest): Promise<StartResult>
   /** Ends a closed tab's program and makes main forget its start key and session. */
   stopTerminal(tabId: string): void
+  /** The program a tab's terminal runs in its foreground, or null when its shell sits at the prompt, has ended or cannot be read. */
+  foregroundProgram(tabId: string): Promise<string | null>
   write(tabId: string, data: string): void
   resize(tabId: string, cols: number, rows: number): void
   onData(tabId: string, cb: (data: string) => void): () => void

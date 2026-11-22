@@ -3,30 +3,57 @@ import type { DockviewApi } from 'dockview-react'
 import { create } from 'zustand'
 import { Button } from '@/components/ui/button'
 import { useClaudeStatus } from '../status/store'
-import { closeClaudeSession, isClaudeTab } from './sessions'
+import { useTerminalStatus } from '../terminal/status'
+import { closeTab, tabKind } from './sessions'
+
+/** What the dialog asks about: a Claude session that works or waits, or a shell that runs a program. */
+type Reason = { kind: 'working' } | { kind: 'waiting' } | { kind: 'program'; program: string }
 
 interface Request {
   api: DockviewApi
   tabId: string
   name: string
-  waiting: boolean
+  reason: Reason
 }
 
 const useRequest = create<{ request: Request | null }>(() => ({ request: null }))
 
+function ask(api: DockviewApi, tabId: string, reason: Reason): void {
+  const name = api.getPanel(tabId)?.title ?? tabId
+  useRequest.setState({ request: { api, tabId, name, reason } })
+}
+
 /**
- * Closes a Claude tab. An Idle session closes at once; a Working or Needs-you one first asks,
- * in Blueprint's own dialog.
+ * Closes a Claude or shell tab. An Idle session closes at once; a Working or Needs-you one first asks,
+ * in Blueprint's own dialog. A shell closes at once when it ended or sits at its prompt, and asks first
+ * while a program runs in it.
  */
 export function requestClose(api: DockviewApi, tabId: string): void {
-  if (!isClaudeTab(tabId)) return
-  const status = useClaudeStatus.getState().tabs[tabId]
-  if (status !== 'working' && status !== 'needs-you') {
-    closeClaudeSession(api, tabId)
-    return
+  const kind = tabKind(tabId)
+  if (kind === 'claude') {
+    const status = useClaudeStatus.getState().tabs[tabId]
+    if (status === 'working') ask(api, tabId, { kind: 'working' })
+    else if (status === 'needs-you') ask(api, tabId, { kind: 'waiting' })
+    else closeTab(api, tabId)
+  } else if (kind === 'shell') {
+    const state = useTerminalStatus.getState().tabs[tabId]?.state
+    if (state === 'exited' || state === 'failed') {
+      closeTab(api, tabId)
+      return
+    }
+    void window.blueprint
+      .foregroundProgram(tabId)
+      .catch(() => null)
+      .then((program) => {
+        if (program) ask(api, tabId, { kind: 'program', program })
+        else closeTab(api, tabId)
+      })
   }
-  const name = api.getPanel(tabId)?.title ?? tabId
-  useRequest.setState({ request: { api, tabId, name, waiting: status === 'needs-you' } })
+}
+
+function description(reason: Reason): string {
+  if (reason.kind === 'program') return `It is still running ${reason.program}.`
+  return reason.kind === 'waiting' ? 'It is waiting for your answer.' : 'It is still working.'
 }
 
 const dismiss = () => useRequest.setState({ request: null })
@@ -43,7 +70,7 @@ export function CloseDialog() {
             {request ? `Close ${request.name}?` : ''}
           </Dialog.Title>
           <Dialog.Description className="mt-2 text-xs text-bp-muted">
-            {request?.waiting ? 'It is waiting for your answer.' : 'It is still working.'}
+            {request ? description(request.reason) : ''}
           </Dialog.Description>
           <div className="mt-4 flex justify-end gap-2">
             <Button variant="outline" size="sm" onClick={dismiss}>
@@ -52,11 +79,11 @@ export function CloseDialog() {
             <Button
               size="sm"
               onClick={() => {
-                if (request) closeClaudeSession(request.api, request.tabId)
+                if (request) closeTab(request.api, request.tabId)
                 dismiss()
               }}
             >
-              Close session
+              {request?.reason.kind === 'program' ? 'Close shell' : 'Close session'}
             </Button>
           </div>
         </Dialog.Popup>

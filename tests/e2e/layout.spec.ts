@@ -196,6 +196,38 @@ test('a layout saved without the review panes gets them back', async () => {
   }
 })
 
+test('a saved layout with a second shell opens it again', async () => {
+  const { folder, home, file } = await layoutFileOf()
+  writeLayoutFile(file, folder, claudeAndShell(['shell-2']))
+  const run = await launch({ folder, home })
+  try {
+    await expect(run.page.locator('.dv-groupview')).toHaveCount(3)
+    await expect.poll(() => probeText(run.page, 'shell-2')).toContain('fake-shell ready')
+  } finally {
+    await run.app.close()
+  }
+})
+
+test('a layout whose shell tab is a Claude terminal gives the default layout', async () => {
+  const { folder, home, file } = await layoutFileOf()
+  const layout = {
+    ...claudeAndShell(['shell-2']),
+    panels: {
+      'claude-1': panel('claude-1', 'Claude', 'claude'),
+      'shell-1': panel('shell-1', 'Shell', 'shell'),
+      'shell-2': panel('shell-2', 'Shell 2', 'claude'),
+    },
+  }
+  writeLayoutFile(file, folder, layout)
+  const run = await launch({ folder, home })
+  try {
+    await expectDefault(run.page)
+    await expect(run.page.locator('[data-tab="shell-2"]')).toHaveCount(0)
+  } finally {
+    await run.app.close()
+  }
+})
+
 test('a layout whose Changes panel is a terminal gives the default layout', async () => {
   const { folder, home, file } = await layoutFileOf()
   const layout = { ...claudeAndShell(['changes']), panels: undefined as unknown }

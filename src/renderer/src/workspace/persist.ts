@@ -1,5 +1,5 @@
 import type { DockviewApi, SerializedDockview } from 'dockview-react'
-import { isClaudeTab } from './sessions'
+import { isClaudeTab, tabKind } from './sessions'
 
 const SAVE_DELAY_MS = 500
 
@@ -7,18 +7,20 @@ function isSerialized(value: unknown): value is SerializedDockview {
   return typeof value === 'object' && value !== null && 'grid' in value && 'panels' in value
 }
 
-/** What each default panel must be: a saved layout whose panel of that id is something else is foreign. */
+/** What each review panel must be: a saved layout whose panel of that id is something else is foreign. */
 const EXPECTED: Record<string, { component: string; kind?: string }> = {
-  'claude-1': { component: 'terminal', kind: 'claude' },
-  'shell-1': { component: 'terminal', kind: 'shell' },
   changes: { component: 'changes' },
   difference: { component: 'difference' },
 }
 
-const CLAUDE_TAB = { component: 'terminal', kind: 'claude' }
+/** What a panel must be: a review panel, or a terminal of the kind its id names (`claude-<n>`, `shell-<n>`). */
+function wanted(id: string): { component: string; kind?: string } | undefined {
+  const kind = tabKind(id)
+  return kind ? { component: 'terminal', kind } : EXPECTED[id]
+}
 
 function isExpected(api: DockviewApi, id: string): boolean {
-  const want = EXPECTED[id] ?? (/^claude-\d+$/.test(id) ? CLAUDE_TAB : undefined)
+  const want = wanted(id)
   const panel = api.getPanel(id)
   if (!want || !panel) return false
   const view = panel.api.component
@@ -28,8 +30,8 @@ function isExpected(api: DockviewApi, id: string): boolean {
 
 /**
  * Loads a saved layout. Gives `false`, with the dock cleared, when the JSON doesn't load, lacks
- * a Claude tab, or holds a panel that isn't a default pane or a Claude session; the caller then adds the
- * default panes.
+ * a Claude tab, or holds a panel that isn't a review pane, a Claude session or a shell; the caller then
+ * adds the default panes.
  */
 export function restoreLayout(api: DockviewApi, saved: unknown): boolean {
   try {

@@ -1,5 +1,6 @@
 import * as pty from 'node-pty'
 import type { ExitInfo } from '../../shared/api'
+import { foregroundProgram } from './foreground'
 import type { SpawnSpec } from './spec'
 
 /** Where terminal output and exits go: the window, in the app. */
@@ -47,6 +48,12 @@ export class TerminalManager {
 
   resize(tabId: string, cols: number, rows: number): void {
     this.terminals.get(tabId)?.resize(clampSize(cols), clampSize(rows))
+  }
+
+  /** The program a tab's terminal runs in its foreground, or null when its shell has the foreground or it has none. */
+  foreground(tabId: string): string | null {
+    const term = this.terminals.get(tabId)
+    return term ? foregroundProgram(term.pid) : null
   }
 
   kill(tabId: string): void {

@@ -1,10 +1,10 @@
 import type { DockviewApi } from 'dockview-react'
-import { isClaudeTab } from './sessions'
+import { isClaudeTab, isShellTab } from './sessions'
 
 /**
  * Adds each default pane that is missing, where the default layout puts it: Changes on the left at
  * full height, Claude and Difference side by side, and a shell below them both. A restored layout
- * keeps the panes it has.
+ * keeps the panes it has; it gets a shell only when it has none.
  */
 export function addDefaultPanels(api: DockviewApi): void {
   const firstClaude = api.panels.find((p) => isClaudeTab(p.id))
@@ -32,7 +32,8 @@ export function addDefaultPanels(api: DockviewApi): void {
       position: { referencePanel: claudeId, direction: 'left' },
     })
   }
-  if (!api.getPanel('shell-1')) {
+  // A layout keeps its shells under any number: the first may have closed.
+  if (!api.panels.some((p) => isShellTab(p.id))) {
     api.addPanel({
       id: 'shell-1',
       component: 'terminal',

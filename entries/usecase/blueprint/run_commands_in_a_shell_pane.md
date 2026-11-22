@@ -30,7 +30,15 @@ At any step, Developer resizes the pane or the window. The shell and its program
 
 ## Alternative Flow 3: Another shell
 
-At step 1, a shell is already open. Developer opens one more shell in a new tab. See [Arrange my panes](arrange_my_panes.md).
+At step 1, a shell is already open. Developer opens one more shell. System opens it in a new tab, named with the next number, like Shell 2. See [Arrange my panes](arrange_my_panes.md).
+
+## Alternative Flow 4: Rename a shell
+
+At any step, Developer renames a shell's tab, such as "dev server". The tab keeps that name after the Folder reopens.
+
+## Alternative Flow 5: Close a shell
+
+At any step, Developer closes a shell's tab while another shell is open. If a program still runs in it, System asks the Developer to confirm first.
 
 ## Slice 1: A shell in the window
 
@@ -51,11 +59,18 @@ Test cases:
 
 ## Slice 2: More than one shell
 
-Covers: Alternative Flow 3.
+Covers: Alternative Flow 3, Alternative Flow 4, Alternative Flow 5.
+
+Work items:
+
+- [x] Open another shell in a new tab, and bring every shell tab back when the Folder reopens ([#13](https://github.com/karsanda/blueprint/issues/13))
+- [x] Rename a shell's tab ([#13](https://github.com/karsanda/blueprint/issues/13))
+- [x] Close a shell's tab, and confirm first while a program runs in it ([#13](https://github.com/karsanda/blueprint/issues/13))
 
 Test cases:
 
 - Given one shell is open, when the Developer opens another, then it opens in a new tab.
+- Given a shell that runs a program, when the Developer closes its tab, then System asks to confirm.
 
 ## Resources
 
