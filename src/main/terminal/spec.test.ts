@@ -30,7 +30,10 @@ test('a resumed start passes --resume and no --session-id', () => {
 })
 
 test('terminalEnv drops the Claude Code nesting variables', () => {
-  const env = terminalEnv({ CLAUDECODE: '1', CLAUDE_CODE_ENTRYPOINT: 'cli', FOO: 'x', GONE: undefined })
+  const env = terminalEnv(
+    { CLAUDECODE: '1', CLAUDE_CODE_ENTRYPOINT: 'cli', FOO: 'x', GONE: undefined },
+    'linux',
+  )
   expect(env).toEqual({ FOO: 'x', TERM: 'xterm-256color', COLORTERM: 'truecolor' })
 })
 
@@ -48,10 +51,13 @@ test("terminalEnv drops the parent session's markers but keeps Claude Code setti
     'CLAUDE_EFFORT',
     'AI_AGENT',
   ]
-  const env = terminalEnv({
-    ...Object.fromEntries(markers.map((m) => [m, 'x'])),
-    CLAUDE_CODE_USE_BEDROCK: '1',
-  })
+  const env = terminalEnv(
+    {
+      ...Object.fromEntries(markers.map((m) => [m, 'x'])),
+      CLAUDE_CODE_USE_BEDROCK: '1',
+    },
+    'linux',
+  )
   expect(env).toEqual({ CLAUDE_CODE_USE_BEDROCK: '1', TERM: 'xterm-256color', COLORTERM: 'truecolor' })
 })
 
