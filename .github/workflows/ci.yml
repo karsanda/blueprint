@@ -14,8 +14,12 @@ concurrency:
 
 jobs:
   checks:
-    name: Links, format, lint, types, unit tests
-    runs-on: ubuntu-24.04
+    name: Links, format, lint, types, unit tests (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -31,8 +35,12 @@ jobs:
       - run: pnpm test
 
   e2e:
-    name: End-to-end tests
-    runs-on: ubuntu-24.04
+    name: End-to-end tests (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -44,12 +52,16 @@ jobs:
       # pnpm can skip Electron's postinstall; this fetches the Electron binary when it is missing.
       - run: node node_modules/electron/install.js
       - name: Install a virtual display
+        if: runner.os == 'Linux'
         run: command -v xvfb-run || (sudo apt-get update && sudo apt-get install -y xvfb)
-      # Electron needs a screen: the tests run in a virtual X display.
-      - run: xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" pnpm e2e
+      # Electron needs a screen: on Linux the tests run in a virtual X display; macOS runners have a screen.
+      - if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" pnpm e2e
+      - if: runner.os == 'macOS'
+        run: pnpm e2e
       - if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-results
+          name: playwright-results-${{ matrix.os }}
           path: test-results/
           if-no-files-found: ignore

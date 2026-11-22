@@ -40,12 +40,13 @@ function noClaudePath(): string {
 }
 
 /**
- * Tests stay off the Developer's desktop. Chromium's headless display draws every window without
- * showing it (BLUEPRINT_E2E_HEADED=1 shows them, for debugging), and a session bus that doesn't
- * exist keeps desktop notifications from reaching the notification daemon.
+ * Tests stay off the Developer's desktop. On Linux, Chromium's headless display draws every window
+ * without showing it (BLUEPRINT_E2E_HEADED=1 shows them, for debugging); macOS has no such display, so
+ * there the windows show. A session bus that doesn't exist keeps desktop notifications from reaching the
+ * notification daemon.
  */
 const headless =
-  process.env['BLUEPRINT_E2E_HEADED'] === '1'
+  process.env['BLUEPRINT_E2E_HEADED'] === '1' || process.platform !== 'linux'
     ? []
     : ['--ozone-platform=headless', '--ozone-override-screen-size=1920,1080']
 const noSessionBus = 'unix:path=/nonexistent/blueprint-e2e-bus'
