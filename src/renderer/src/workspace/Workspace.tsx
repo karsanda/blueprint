@@ -27,7 +27,6 @@ import { installKeys } from './commands'
 import { installPopoutIsolation } from './isolate'
 import { GroupActions } from './GroupActions'
 import { tabKind } from './sessions'
-import { useWorkspaceApi } from './workspaceApi'
 
 const blueprintTheme: DockviewTheme = { name: 'blueprint', className: 'dockview-theme-blueprint', gap: 6 }
 const components = {
@@ -184,7 +183,6 @@ export function Workspace() {
             installReviewFollow(e.api)
             installNotifications(e.api)
             installKeys(e.api)
-            useWorkspaceApi.setState({ api: e.api })
           })()
         }}
       />

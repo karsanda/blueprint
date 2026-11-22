@@ -188,18 +188,6 @@ test('closing a busy shell in a pop-out asks in that window', async () => {
   await app.close()
 })
 
-test('a preset closes pop-out windows', async () => {
-  const { app, page } = await launch()
-  await ready(page)
-  await popOut(app, page, 'Shell')
-  await page.getByRole('button', { name: 'Layout' }).click()
-  await page.getByRole('menuitem', { name: /^Agent and review/ }).click()
-  await expect.poll(() => app.windows().length).toBe(1)
-  await expect(page.locator('[data-tab="shell-1"]')).toHaveCount(1)
-  await expect(page.locator('.dv-groupview')).toHaveCount(4)
-  await app.close()
-})
-
 test('a pop-out window comes back after reopening', async () => {
   const first = await launch()
   await ready(first.page)

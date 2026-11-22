@@ -61,19 +61,17 @@ test('adding Alt moves the tab instead', () => {
   ])
 })
 
-test('Ctrl+Shift+T, N, Z and 1 to 4 open tabs, zoom and pick presets', () => {
+test('Ctrl+Shift+T, N and Z open tabs and zoom', () => {
   expect(workspaceKeyAction(key('T', cs))).toEqual({ kind: 'new', tab: 'shell' })
   expect(workspaceKeyAction(key('N', cs))).toEqual({ kind: 'new', tab: 'claude' })
   expect(workspaceKeyAction(key('Z', cs))).toEqual({ kind: 'zoom' })
+})
+
+test('Ctrl+Shift+1 to 4 go to the program', () => {
   // With Shift held, the digit keys type `!`, `@`, `#` and `$`: the physical key is what counts.
   expect(
     ['!', '@', '#', '$'].map((k, i) => workspaceKeyAction({ ...key(k, cs), code: `Digit${i + 1}` })),
-  ).toEqual([
-    { kind: 'preset', preset: 'agent-and-review' },
-    { kind: 'preset', preset: 'two-agents' },
-    { kind: 'preset', preset: 'terminal-heavy' },
-    { kind: 'preset', preset: 'focus' },
-  ])
+  ).toEqual([null, null, null, null])
 })
 
 test('Ctrl+Tab and Ctrl+Shift+Tab switch tabs', () => {

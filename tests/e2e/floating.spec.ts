@@ -66,18 +66,6 @@ test('Dock with the neighbour gone docks at the right edge', async () => {
   await app.close()
 })
 
-test('a preset docks floating panes', async () => {
-  const { app, page } = await launch()
-  await ready(page)
-  await paneMenu(page, 'Difference', 'Float')
-  await expect(floating(page)).toHaveCount(1)
-  await page.getByRole('button', { name: 'Layout' }).click()
-  await page.getByRole('menuitem', { name: /^Agent and review/ }).click()
-  await expect(floating(page)).toHaveCount(0)
-  await expect(page.locator('.dv-groupview')).toHaveCount(4)
-  await app.close()
-})
-
 test('a floating pane comes back after reopening', async () => {
   const first = await launch()
   await ready(first.page)

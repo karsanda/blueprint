@@ -43,8 +43,8 @@ export function TerminalPanel({ api, params }: IDockviewPanelProps<TerminalParam
       const take = () => {
         // A rename field the Developer opened by double-clicking keeps the keyboard.
         if (doc.activeElement?.classList.contains('bp-tab-name')) return
-        // A tab that stopped being active meanwhile (as tabs do while a preset rearranges the dock) must
-        // not take the keyboard: focusing its terminal would make dockview activate it again.
+        // A tab that stopped being active meanwhile (as tabs do while a saved layout loads) must not take
+        // the keyboard: focusing its terminal would make dockview activate it again.
         if (!api.isActive) return
         term?.focus()
         if (api.isActive && term?.textarea && doc.activeElement !== term.textarea && ++frames < 30) {

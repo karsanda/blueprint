@@ -2,7 +2,6 @@ import type { DockviewApi, DockviewGroupPanel } from 'dockview-react'
 import { focusTab } from '../status/notify'
 import { type Direction, type WorkspaceAction, workspaceKeyAction } from '../terminal/keys'
 import { findSession } from '../terminal/session'
-import { applyPreset } from './presets'
 import { openTab, tabKind } from './sessions'
 
 /**
@@ -92,9 +91,6 @@ export function runWorkspaceAction(
     case 'zoom':
       if (api.hasMaximizedGroup()) api.exitMaximizedGroup()
       else group?.api.maximize()
-      return
-    case 'preset':
-      applyPreset(api, action.preset)
       return
   }
 }

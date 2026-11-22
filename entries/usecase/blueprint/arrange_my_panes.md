@@ -20,25 +20,21 @@ The Developer shapes the window to the task at hand and finds it the same way ne
 6. Developer closes Blueprint.
 7. System restores the same layout when the Developer reopens the Folder.
 
-## Alternative Flow 1: Pick a preset layout
-
-At any step, Developer chooses a preset, such as Agent and review. System rearranges the panes to match.
-
-## Alternative Flow 2: Zoom one pane
+## Alternative Flow 1: Zoom one pane
 
 At any step, Developer zooms a pane. It fills the window until the Developer zooms out again.
 
-## Alternative Flow 3: Use the keyboard
+## Alternative Flow 2: Use the keyboard
 
 At steps 2 to 5, Developer uses keys instead of the mouse to move focus, move tabs and switch tabs.
 
-## Alternative Flow 4: Float or pop out a tab
+## Alternative Flow 3: Float or pop out a tab
 
 At step 4, Developer floats the tab above the layout, or opens it in its own window.
 
 ## Slice 1: Tabs, splits and resizing
 
-Covers: Basic Flow steps 1 to 5, Alternative Flow 2.
+Covers: Basic Flow steps 1 to 5, Alternative Flow 1.
 
 Work items:
 
@@ -67,19 +63,20 @@ Test cases:
 
 - Given a changed layout, when the Developer reopens the Folder, then the layout is the same.
 
-## Slice 3: Presets, keys and floating
+## Slice 3: Keys and floating
 
-Covers: Alternative Flow 1, Alternative Flow 3, Alternative Flow 4.
+Covers: Alternative Flow 2, Alternative Flow 3.
 
 Work items:
 
-- [x] Pick a preset from the top bar or with a key ([#14](https://github.com/karsanda/blueprint/issues/14))
 - [x] Move focus, move and switch tabs, open tabs and zoom with keys ([#14](https://github.com/karsanda/blueprint/issues/14))
 - [x] Float a pane, or pop it out into its own window ([#14](https://github.com/karsanda/blueprint/issues/14))
 
 Test cases:
 
-- Given any layout, when the Developer picks the Agent and review preset, then the panes match that preset.
+- Given two panes, when the Developer presses the key for the right, then the right pane takes the keyboard.
+- Given a floated pane, when the Developer docks it, then it returns beside the pane it left.
+- Given a popped-out pane, when the Developer closes its window, then the pane returns to the layout.
 
 ## Resources
 

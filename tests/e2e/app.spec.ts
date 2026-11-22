@@ -14,3 +14,13 @@ test('opens a Blueprint window in the Blueprint look', async () => {
   expect(await page.evaluate(fontLoaded, 'Cascadia Code Variable')).toBe(true)
   await app.close()
 })
+
+test('the top bar names the Folder and offers no layouts', async () => {
+  const { app, page, folder } = await launch()
+  const bar = page.getByRole('banner')
+  await expect(bar).toContainText(folder)
+  // The Developer arranges the panes by hand; Blueprint keeps no preset layouts.
+  await expect(page.locator('[data-tab="claude-1"]')).toBeVisible()
+  await expect(bar.getByRole('button')).toHaveCount(0)
+  await app.close()
+})
