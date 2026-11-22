@@ -1,0 +1,97 @@
+name: Release
+
+# A tag `v<version>` builds the Ubuntu and macOS packages into a draft GitHub release, which the Developer
+# reads and publishes. A pull request that changes the packaging builds both packages as a dry run, and
+# creates no release.
+on:
+  push:
+    tags: ['v*']
+  pull_request:
+    paths:
+      - electron-builder.yml
+      - build/**
+      - package.json
+      - .github/workflows/release.yml
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    name: Tag matches the version
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Compare the tag with package.json
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "${GITHUB_REF_NAME}" != "v${version}" ]; then
+            echo "The tag ${GITHUB_REF_NAME} is not v${version}, the version in package.json." >&2
+            exit 1
+          fi
+
+  linux:
+    name: Ubuntu package
+    needs: [version]
+    if: always() && (needs.version.result == 'success' || needs.version.result == 'skipped')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node node_modules/electron/install.js
+      - run: pnpm package:linux
+      - run: sh scripts/check_package.sh
+      - uses: actions/upload-artifact@v7
+        with:
+          name: deb
+          path: dist/*.deb
+          if-no-files-found: error
+
+  mac:
+    name: macOS package
+    needs: [version]
+    if: always() && (needs.version.result == 'success' || needs.version.result == 'skipped')
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node node_modules/electron/install.js
+      - run: pnpm package:mac
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dmg
+          path: dist/*.dmg
+          if-no-files-found: error
+
+  release:
+    name: Draft release
+    if: github.event_name == 'push'
+    needs: [linux, mac]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
+        with:
+          path: packages
+          merge-multiple: true
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" --draft \
+            --title "Blueprint ${GITHUB_REF_NAME}" \
+            --notes-file "doc/releases/${GITHUB_REF_NAME}.md" \
+            packages/*
