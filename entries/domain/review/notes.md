@@ -71,7 +71,7 @@ This session survives a reopen ([#27](https://github.com/karsanda/blueprint/issu
 - Each conversation gets a record `<kept store>/sessions/<session id>.json`: the session base's tree and every path the session touched since its start. The id must be a session id (a UUID), so it never names another file.
 - The record is written when the base lands, at each touch, and at a prompt that names a new session id. It follows the conversation the tab saves: after `/clear` it moves to the new id at the next prompt, as the tab's saved conversation does.
 - A tab that resumes a conversation gets its record back: the old base, and its touched paths credited to the tab again. This turn starts over: it says there is no prompt yet. A record whose base tree is gone from the store is ignored, and a new base is taken.
-- Closing a tab drops its record, and so does a start that does not continue the tab's conversation, such as Restart. Records untouched for 30 days are dropped when the Folder opens. When none is left, the whole kept store goes, so it starts afresh instead of growing.
+- Closing a tab drops its record, and so does a start that does not continue the tab's conversation, such as Restart. Records untouched for 30 days are dropped when the Folder opens. When none is left, the whole kept store goes, so it starts afresh instead of growing. What cannot go stays for a later run, such as objects a git of an earlier run still writes there: no kept session needs them. An earlier wipe that failed this way stopped the store from opening, and the review said the Folder was not a Git repository.
 - Known gap: while a conversation stays open for weeks, the kept store keeps every snapshot's new objects.
 
 ### Why not a file watcher

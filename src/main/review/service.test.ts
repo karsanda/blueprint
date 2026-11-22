@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process'
 import {
   chmodSync,
   copyFileSync,
+  mkdirSync,
   mkdtempSync,
   readdirSync,
   realpathSync,
@@ -751,6 +752,25 @@ describe('ReviewService across a reopen', () => {
     const second = await rig({ repo: first.repo, kept, resume: ID1, git: fake.git })
     second.write('e.txt')
     expect(await second.listed('session', [['e.txt', []]])).toEqual([['e.txt', []]])
+  })
+
+  it('a kept store the next run cannot wipe whole still opens', async () => {
+    const kept = temp('bp-kept-')
+    const first = await firstRun(kept)
+    first.svc.endSession('claude-1')
+    first.svc.close()
+    // What a git an earlier run left running may still be writing: the wipe cannot remove it.
+    const stuck = join(kept, 'objects', 'stuck')
+    mkdirSync(stuck, { recursive: true })
+    writeFileSync(join(stuck, 'object'), '')
+    chmodSync(stuck, 0o500)
+    try {
+      const second = await rig({ repo: first.repo, kept, resume: ID1 })
+      second.write('e.txt')
+      expect(await second.listed('session', [['e.txt', []]])).toEqual([['e.txt', []]])
+    } finally {
+      chmodSync(stuck, 0o700)
+    }
   })
 
   it('a Blueprint that does not hold the Folder keeps nothing', async () => {
