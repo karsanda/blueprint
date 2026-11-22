@@ -71,6 +71,15 @@ test('resizes the program', async () => {
   await expect.poll(() => read('size').trim(), { timeout: 3000 }).toBe('30 100')
 })
 
+test('a shell runs a command in its foreground until it ends', async () => {
+  manager.start('t', { file: '/bin/sh', args: ['-i'], cwd: tmp, env: terminalEnv(process.env) }, 80, 24)
+  manager.write('t', 'sleep 5\n')
+  await waitFor(() => manager.foreground('t') === 'sleep')
+  manager.write('t', '\x03')
+  await waitFor(() => manager.foreground('t') === null)
+  expect(manager.foreground('none')).toBeNull()
+})
+
 test('clamps an unknown size', async () => {
   manager.start('t', sh('stty size > size; sleep 5'), 0, Number.NaN)
   await expect.poll(() => read('size').trim(), { timeout: 3000 }).toBe('2 2')
