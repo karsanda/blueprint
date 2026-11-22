@@ -1,5 +1,7 @@
+import { writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { type ElectronApplication, expect, type Locator, type Page, test } from '@playwright/test'
-import { launch, probeRenders, probeText, readLog } from './launch'
+import { gitFolder, launch, probeRenders, probeText, readLog, typeInto } from './launch'
 
 /** A tab by its exact title: `Shell` is also part of `Shell 2`. */
 function tab(page: Page, title: string): Locator {
@@ -115,6 +117,58 @@ test('a notification click raises the pop-out window holding the session', async
   await app.close()
 })
 
+test('no notification while a pop-out window is in front', async () => {
+  const { app, page } = await launch()
+  await ready(page)
+  await popOut(app, page, 'Shell')
+  await app.evaluate(({ BrowserWindow, Notification }) => {
+    const windows = BrowserWindow.getAllWindows()
+    const pop = windows.find((w) => w.webContents.getURL().endsWith('popout.html'))
+    if (!pop) throw new Error('No pop-out window')
+    // Electron finds the focused window by asking each one.
+    for (const w of windows) w.isFocused = () => w === pop
+    globalThis.shown = []
+    Notification.isSupported = () => true
+    Notification.prototype.show = function (this: Electron.Notification) {
+      globalThis.shown?.push(this)
+    }
+  })
+  await typeInto(page, 'claude-1', 'p?')
+  await expect(page.locator('[data-tab="claude-1"]')).toHaveAttribute('data-status', 'needs-you')
+  await page.waitForTimeout(300)
+  expect(await app.evaluate(() => globalThis.shown?.length)).toBe(0)
+  await app.close()
+})
+
+test('focusing a pop-out window refreshes the review', async () => {
+  const folder = gitFolder()
+  const { app, page, log } = await launch({ folder })
+  await ready(page)
+  await popOut(app, page, 'Shell')
+  // With the Changes pane taken as hidden, only a hook or a window coming to the front refreshes the review.
+  await page.evaluate(() => {
+    window.reviewStates = []
+    window.blueprint.onReviewUpdate((state) => window.reviewStates?.push(state))
+    window.blueprint.setReviewView({ range: 'turn', visible: false, tabId: null })
+  })
+  await typeInto(page, 'claude-1', 'p')
+  await expect.poll(() => readLog(log, 'claude.hooks')).toContain('UserPromptSubmit 204')
+  writeFileSync(join(folder, 'README.md'), 'changed while the pop-out is in front\n')
+  const listed = () =>
+    page.evaluate(() =>
+      (window.reviewStates ?? []).flatMap((s) => (s.kind === 'changes' ? s.changes.map((c) => c.path) : [])),
+    )
+  await page.waitForTimeout(500)
+  expect(await listed()).not.toContain('README.md')
+  await app.evaluate(({ BrowserWindow }) => {
+    BrowserWindow.getAllWindows()
+      .find((w) => w.webContents.getURL().endsWith('popout.html'))
+      ?.emit('focus')
+  })
+  await expect.poll(listed).toContain('README.md')
+  await app.close()
+})
+
 test('closing a busy shell in a pop-out asks in that window', async () => {
   const { app, page } = await launch({ shell: '/bin/sh' })
   await expect.poll(() => probeText(page, 'claude-1')).toContain('claude ready')
@@ -186,6 +240,80 @@ test('a pop-out window refuses to navigate or open windows', async () => {
   await pop.waitForTimeout(300)
   expect(app.windows().length).toBe(2)
   expect(await app.evaluate(() => globalThis.openedUrls)).toEqual(['https://example.com/docs'])
+  await app.close()
+})
+
+test('a pop-out page runs no inline script', async () => {
+  const { app, page } = await launch()
+  await ready(page)
+  const pop = await popOut(app, page, 'Shell')
+  await pop.evaluate(() => {
+    const script = document.createElement('script')
+    script.textContent = 'window.injected = true'
+    document.body.append(script)
+  })
+  expect(await pop.evaluate(() => window.injected)).toBeUndefined()
+  await app.close()
+})
+
+test("a pop-out page cannot reach the main window's API", async () => {
+  const { app, page, log } = await launch()
+  await ready(page)
+  const pop = await popOut(app, page, 'Shell')
+  // A pop-out page gets no API of its own; its only way to one would be the window that opened it.
+  await pop.evaluate(() => {
+    const opener: unknown = window.opener
+    if (opener !== null && typeof opener === 'object' && 'blueprint' in opener) {
+      const api = opener.blueprint
+      if (typeof api === 'object' && api !== null && 'write' in api && typeof api.write === 'function')
+        api.write('shell-1', 'from-the-pop-out')
+    }
+  })
+  await page.evaluate(() => window.blueprint.write('shell-1', 'from-the-main-window'))
+  await expect.poll(() => readLog(log, 'fake-shell.input')).toContain('from-the-main-window')
+  expect(readLog(log, 'fake-shell.input')).not.toContain('from-the-pop-out')
+  await app.close()
+})
+
+test('a pop-out window loads its own page only once', async () => {
+  const { app, page } = await launch()
+  await ready(page)
+  const pop = await popOut(app, page, 'Shell')
+  await pop.evaluate(() => {
+    window.loadedOnce = true
+  })
+  // A navigation, unlike a reload, asks the guard first.
+  await pop.evaluate(() => location.assign(location.href)).catch(() => undefined)
+  await pop.waitForTimeout(500)
+  expect(await pop.evaluate(() => window.loadedOnce)).toBe(true)
+  await app.close()
+})
+
+test('closing a pop-out window removes its key listener', async () => {
+  const { app, page } = await launch()
+  await ready(page)
+  const pop = await popOut(app, page, 'Shell')
+  // The record goes to storage the main window shares: the pop-out's own page is gone once it closes.
+  await pop.evaluate(() => {
+    localStorage.setItem('removedKeyListeners', '0')
+    const remove = window.removeEventListener.bind(window)
+    window.removeEventListener = (
+      type: string,
+      listener: EventListenerOrEventListenerObject,
+      options?: boolean | EventListenerOptions,
+    ) => {
+      const capture = typeof options === 'boolean' ? options : options?.capture === true
+      if (type === 'keydown' && capture)
+        localStorage.setItem(
+          'removedKeyListeners',
+          String(Number(localStorage.getItem('removedKeyListeners')) + 1),
+        )
+      remove(type, listener, options)
+    }
+  })
+  await closePopouts(app)
+  await expect(page.locator('[data-tab="shell-1"]')).toHaveCount(1)
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('removedKeyListeners'))).toBe('1')
   await app.close()
 })
 

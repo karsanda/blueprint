@@ -24,7 +24,7 @@ Changes count from the moment the Developer sent the prompt. Edits the Developer
 
 ## Alternative Flow 1: This session
 
-At step 4, Developer chooses This session. System lists every Change since the session started.
+At step 4, Developer chooses This session. System lists every Change since the session started, also after a reopen that resumes it.
 
 ## Alternative Flow 2: Changed outside Claude
 
@@ -68,10 +68,12 @@ Covers: Alternative Flow 1.
 Work items:
 
 - [x] Switch the list between This turn and This session
+- [x] Keep This session's Changes when a reopen resumes the session ([#27](https://github.com/karsanda/blueprint/issues/27))
 
 Test cases:
 
 - Given two prompts in one session, when the Developer chooses This session, then Changes from both turns are listed.
+- Given a session's Changes, when the Developer reopens the Folder, then This session still lists them as Claude's.
 
 ## Known gaps
 

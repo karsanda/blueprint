@@ -68,6 +68,20 @@ describe('signalFromHook', () => {
     [{ hook_event_name: 'PostToolUse' }, { kind: 'tool-done' }],
     [{ hook_event_name: 'PostToolUseFailure' }, null],
     [{ hook_event_name: 'Stop' }, { kind: 'stop' }],
+    [{ hook_event_name: 'Stop', last_assistant_message: 'Done. The tests pass.' }, { kind: 'stop' }],
+    // A turn that ends on a question waits for the Developer, though no hook says so.
+    [
+      {
+        hook_event_name: 'Stop',
+        last_assistant_message: 'I found two configs.\n\nWhich one should I change?',
+      },
+      { kind: 'asks' },
+    ],
+    [{ hook_event_name: 'Stop', last_assistant_message: '**Should I go on?**\n\n' }, { kind: 'asks' }],
+    [
+      { hook_event_name: 'Stop', last_assistant_message: 'Why did it fail? The path was wrong.' },
+      { kind: 'stop' },
+    ],
     [{ hook_event_name: 'SubagentStop' }, null],
   ]
   it.each(cases)('follows the status table for %o', (input, expected) => {

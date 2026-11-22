@@ -10,16 +10,24 @@ import type {
   StartRequest,
   StartResult,
 } from '../shared/api'
+import { holdFolder, lockFile, releaseFolder } from './layout/lock'
 import { initialWindow, layoutFile, readLayout, writeLayout } from './layout/store'
 import type { NeedsYouNotifier } from './notify'
+import { keptReviewDir } from './review/kept'
 import type { ReviewService } from './review/service'
 import type { StatusRelay } from './status/relay'
 import type { TerminalManager } from './terminal/manager'
+import { claudeSettingsFiles, hooksBlockedBy, managedSettingsDir } from './status/blocked'
 import { resumable } from './terminal/resume'
 import { claudeSpec, type SpawnSpec, shellSpec } from './terminal/spec'
 
 export interface IpcDeps {
   folder: FolderState
+  /**
+   * Whether this Blueprint holds the Folder. Another one that opened it first keeps its conversations and
+   * its layout file, so this one resumes nothing and saves no layout.
+   */
+  holdsFolder: boolean
   manager: TerminalManager
   relay: StatusRelay
   notifier: NeedsYouNotifier
@@ -28,6 +36,8 @@ export interface IpcDeps {
   sendConversation: (tabId: string, conversation: SavedConversation | null) => void
   /** Writes the Claude Code settings that carry Blueprint's hooks for one start, and returns the file. */
   hookSettingsFor: (startKey: string) => string
+  /** The address Blueprint's hooks post to for one start. */
+  hookUrlFor: (startKey: string) => string
 }
 
 /** Registers the channels behind `window.blueprint`. Blueprint has one window, so this runs once. */
@@ -37,8 +47,11 @@ export function registerIpc(win: BrowserWindow, deps: IpcDeps, userData: string)
     const result = await dialog.showOpenDialog(win, { properties: ['openDirectory'] })
     const picked = result.canceled ? undefined : result.filePaths[0]
     if (picked) {
+      const before = deps.folder.folder
+      if (before && deps.holdsFolder) releaseFolder(lockFile(userData, before), process.pid)
       deps.folder = { folder: picked }
-      await deps.review.setFolder(picked)
+      deps.holdsFolder = holdFolder(userData, picked)
+      await deps.review.setFolder(picked, deps.holdsFolder ? keptReviewDir(userData, picked) : undefined)
       // The window goes to this Folder's place; closing it then saves the bounds back to the same Folder.
       const start = initialWindow(
         readLayout(layoutFile(userData, picked))?.window,
@@ -79,7 +92,7 @@ export function registerIpc(win: BrowserWindow, deps: IpcDeps, userData: string)
   })
   ipcMain.on('layout:save', (_e, dockview: unknown) => {
     const folder = deps.folder.folder
-    if (!folder) return
+    if (!folder || !deps.holdsFolder) return
     try {
       writeLayout(layoutFile(userData, folder), folder, { dockview })
     } catch (err) {
@@ -95,7 +108,10 @@ async function startTerminal(deps: IpcDeps, req: StartRequest): Promise<StartRes
   const folder = deps.folder.folder
   if (!folder) return { ok: false, failure: { reason: 'spawn-failed', message: 'No Folder is open.' } }
   // Only a conversation whose transcript is still on disk can be resumed; anything else starts a new one.
-  const resume = req.kind === 'claude' && resumable(req.resume, existsSync) ? req.resume : undefined
+  // A Folder another Blueprint holds resumes nothing: that one already runs its conversations.
+  const heldElsewhere = req.kind === 'claude' && req.resume !== undefined && !deps.holdsFolder
+  const resume =
+    req.kind === 'claude' && !heldElsewhere && resumable(req.resume, existsSync) ? req.resume : undefined
   // The start key, not the session id, routes hooks to the tab: `/clear` changes the session id.
   const startKey = randomUUID()
   let spec: SpawnSpec | StartFailure
@@ -118,7 +134,7 @@ async function startTerminal(deps: IpcDeps, req: StartRequest): Promise<StartRes
     deps.relay.register(req.tabId, startKey)
     try {
       // The session base comes before Claude's first edit, unless Git takes longer than the 8-second wait.
-      await deps.review.startSession(req.tabId, startKey)
+      await deps.review.startSession(req.tabId, startKey, resume?.sessionId)
     } catch (err) {
       // Claude is worth more than its review: start it without one.
       console.warn('Review could not start a session:', err)
@@ -136,9 +152,15 @@ async function startTerminal(deps: IpcDeps, req: StartRequest): Promise<StartRes
         req.tabId,
         resume ? { sessionId: resume.sessionId, transcript: resume.transcript } : null,
       )
-    return req.kind === 'claude' && req.resume !== undefined
-      ? { ok: true, pid, resumed: resume !== undefined }
-      : { ok: true, pid }
+    if (req.kind !== 'claude') return { ok: true, pid }
+    // Settings that stop the hooks leave the status and the review blind: the pane says why.
+    const files = claudeSettingsFiles(folder, process.env, managedSettingsDir(process.platform))
+    const blocked = hooksBlockedBy(files, deps.hookUrlFor(startKey))
+    const hooks = blocked ? { hooksBlocked: blocked } : {}
+    if (req.resume === undefined) return { ok: true, pid, ...hooks }
+    return heldElsewhere
+      ? { ok: true, pid, resumed: false, heldElsewhere: true, ...hooks }
+      : { ok: true, pid, resumed: resume !== undefined, ...hooks }
   } catch (err) {
     return {
       ok: false,

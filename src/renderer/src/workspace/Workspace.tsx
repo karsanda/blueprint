@@ -24,6 +24,7 @@ import { addDefaultPanels } from './defaultLayout'
 import { installLayoutSaving, restoreLayout } from './persist'
 import { CloseDialog, requestClose } from './CloseDialog'
 import { installKeys } from './commands'
+import { installPopoutIsolation } from './isolate'
 import { GroupActions } from './GroupActions'
 import { tabKind } from './sessions'
 import { useWorkspaceApi } from './workspaceApi'
@@ -167,6 +168,7 @@ export function Workspace() {
         onReady={(e) => {
           // First, so no conversation pushed while the layout loads goes unheard.
           installConversationSaving(e.api)
+          installPopoutIsolation(e.api)
           void (async () => {
             try {
               const saved = await window.blueprint.getLayout().catch(() => null)

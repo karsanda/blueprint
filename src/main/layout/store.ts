@@ -18,10 +18,14 @@ interface Rect {
   height: number
 }
 
-/** The file that keeps this Folder's layout: `<userData>/layouts/<16 hex of sha256(folder)>.json`. */
+/** A Folder's name in Blueprint's own files: the first 16 hex digits of sha256(folder). */
+export function folderKey(folder: string): string {
+  return createHash('sha256').update(folder).digest('hex').slice(0, 16)
+}
+
+/** The file that keeps this Folder's layout: `<userData>/layouts/<folderKey>.json`. */
 export function layoutFile(userData: string, folder: string): string {
-  const name = createHash('sha256').update(folder).digest('hex').slice(0, 16)
-  return join(userData, 'layouts', `${name}.json`)
+  return join(userData, 'layouts', `${folderKey(folder)}.json`)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

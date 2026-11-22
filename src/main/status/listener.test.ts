@@ -73,6 +73,14 @@ describe('hook listener', () => {
     expect(events[1]).toEqual({ ...base, file_path: '/f/n.ipynb' })
   })
 
+  it("reads the text of Claude's final response from a Stop", async () => {
+    const { events, l } = await start()
+    const stop = { hook_event_name: 'Stop', session_id: 's1', last_assistant_message: 'Which one?' }
+    await post(l, JSON.stringify(stop))
+    await expect.poll(() => events.length).toBe(1)
+    expect(events[0]).toEqual(stop)
+  })
+
   it('waits for the handler before replying', async () => {
     listener = await startHookListener(() => new Promise<void>((r) => setTimeout(r, 300)))
     const started = Date.now()

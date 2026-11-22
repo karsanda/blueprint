@@ -81,7 +81,10 @@ export function TerminalPanel({ api, params }: IDockviewPanelProps<TerminalParam
           kind={params.kind}
           status={status}
           onRestart={() => void session.restart()}
-          onDismiss={() => useTerminalStatus.getState().set(api.id, { state: 'running' })}
+          onDismiss={(which) => {
+            const now = useTerminalStatus.getState().tabs[api.id]
+            if (now) useTerminalStatus.getState().set(api.id, { ...now, [which]: undefined })
+          }}
         />
       )}
     </div>

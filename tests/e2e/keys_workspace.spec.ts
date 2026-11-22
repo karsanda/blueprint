@@ -139,3 +139,37 @@ test('keys typed in the rename field stay in it', async () => {
   await expect(page.locator('.dv-groupview', { has: field })).toHaveClass(/dv-active-group/)
   await app.close()
 })
+
+test('workspace keys do nothing while a menu is open', async () => {
+  const { app, page } = await launch()
+  await ready(page)
+  await focusTerminal(page, 'claude-1')
+  await groupWith(page, 'Claude').getByRole('button', { name: 'Pane menu' }).click()
+  await expect(page.getByRole('menu')).toBeVisible()
+  await page.keyboard.press('Control+Shift+KeyZ')
+  await page.waitForTimeout(300)
+  // A menu hides the rest of the window from roles, so look the zoom button up by its label.
+  await expect(page.locator('[aria-label="Zoom out"]')).toHaveCount(0)
+  await app.close()
+})
+
+test('workspace keys do nothing while the close question is open', async () => {
+  const { app, page } = await launch({ shell: '/bin/sh' })
+  try {
+    await groupWith(page, 'Shell').getByRole('button', { name: 'New shell' }).click()
+    await expect.poll(() => probeText(page, 'shell-2')).toContain('$')
+    await focusTerminal(page, 'shell-2')
+    await page.keyboard.type('sleep 3072')
+    await page.keyboard.press('Enter')
+    await expect.poll(() => page.evaluate(() => window.blueprint.foregroundProgram('shell-2'))).toBe('sleep')
+    await tab(page, 'Shell 2').hover()
+    await tab(page, 'Shell 2').locator('.dv-default-tab-action').click()
+    await expect(page.getByRole('dialog').getByText('Close Shell 2?')).toBeVisible()
+    await page.keyboard.press('Control+Tab')
+    await page.waitForTimeout(300)
+    await expect(tab(page, 'Shell 2')).toHaveClass(/dv-active-tab/)
+    await expect(page.getByRole('dialog')).toBeVisible()
+  } finally {
+    await app.close()
+  }
+})

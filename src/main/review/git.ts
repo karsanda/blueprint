@@ -132,7 +132,9 @@ export class SnapshotStore {
   /**
    * `git` is the git program. `timeoutMs` is how long a store command may run before it is killed, and
    * `openTimeoutMs` the same for `rev-parse`. A `rev-parse` that gives no answer rejects with GitTimeout: it
-   * says nothing about the Folder.
+   * says nothing about the Folder. With `keep`, the store's objects stay from an earlier run, so the trees
+   * kept there can still be compared; its index starts afresh, as one may name objects the repository has
+   * since collected.
    */
   static async open(
     folder: string,
@@ -141,7 +143,8 @@ export class SnapshotStore {
       git = 'git',
       timeoutMs = TIMEOUT_MS,
       openTimeoutMs = OPEN_TIMEOUT_MS,
-    }: { git?: string; timeoutMs?: number; openTimeoutMs?: number } = {},
+      keep = false,
+    }: { git?: string; timeoutMs?: number; openTimeoutMs?: number; keep?: boolean } = {},
   ): Promise<SnapshotStore | { problem: GitProblem }> {
     let objects: string
     try {
@@ -151,7 +154,12 @@ export class SnapshotStore {
       if (error instanceof GitTimeout) throw error
       return { problem: errorCode(error) === 'ENOENT' ? 'no-git' : 'not-a-repo' }
     }
-    rmSync(storeDir, { recursive: true, force: true })
+    if (keep) {
+      rmSync(join(storeDir, 'index'), { force: true })
+      rmSync(join(storeDir, 'index.lock'), { force: true })
+    } else {
+      rmSync(storeDir, { recursive: true, force: true })
+    }
     mkdirSync(join(storeDir, 'objects'), { recursive: true })
     const env = gitEnv({
       GIT_INDEX_FILE: join(storeDir, 'index'),
@@ -179,6 +187,16 @@ export class SnapshotStore {
     return result.finally(() => {
       this.running--
     })
+  }
+
+  /** Whether the store, or the repository behind it, still has this tree. */
+  async has(tree: string): Promise<boolean> {
+    try {
+      await this.exec(['cat-file', '-e', `${tree}^{tree}`])
+      return true
+    } catch {
+      return false
+    }
   }
 
   async changes(base: string, now: string): Promise<GitChange[]> {

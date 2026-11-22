@@ -147,12 +147,13 @@ export class TerminalSession {
       return
     }
     this.resume = undefined
-    status.set(
-      this.tabId,
-      resume && result.resumed === false
-        ? { state: 'running', notice: 'conversation-lost' }
-        : { state: 'running' },
-    )
+    status.set(this.tabId, {
+      state: 'running',
+      ...(resume && result.resumed === false
+        ? { notice: result.heldElsewhere ? 'held-elsewhere' : 'conversation-lost' }
+        : {}),
+      ...(result.hooksBlocked ? { hooksBlocked: result.hooksBlocked } : {}),
+    })
     if (this.kind === 'claude') useClaudeStatus.getState().set(this.tabId, 'idle')
     // The pane may have changed size while the program was starting.
     if (this.term.cols !== cols || this.term.rows !== rows) {

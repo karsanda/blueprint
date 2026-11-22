@@ -49,6 +49,11 @@ Detail for [Talk to Claude in a pane](../../usecase/blueprint/talk_to_claude_in_
 - Restart after Claude Code exits starts a new conversation, and so does a `+` tab. A first start that fails (for example `claude` is not found) keeps the saved conversation, so Restart after it still resumes. The new conversation is saved at its first prompt, so a tab that never got one starts fresh after reopening.
 - Claude Code keeps the session id on `--resume` and redraws the conversation in the pane. `--resume` with `--session-id` fails unless `--fork-session` is given, so a resumed start passes no `--session-id`. Hooks still route by the start key.
 - Shells start fresh in restored panes.
+- One Blueprint per Folder ([#29](https://github.com/karsanda/blueprint/issues/29)):
+  - The Blueprint that opens a Folder first holds it, through a lock file `<user data>/locks/<folderKey>.lock` holding its pid. `folderKey` is the layout file's name: the first 16 hex digits of sha256(Folder path). The file is made with `wx`, so two Blueprints opening the Folder at once cannot both take it.
+  - A lock whose pid no longer runs, or that names no pid, is taken over. A pid that runs as another user counts as running.
+  - A Blueprint that does not hold the Folder resumes nothing: each tab that had a conversation starts a new one, and the pane says the Folder is open in another Blueprint window. It writes no layout file and no window bounds, and keeps its review in its own run's store (see [Review](../review/notes.md)).
+  - The lock goes on quit, and when the Developer picks another Folder. A lock that cannot be written at all leaves Blueprint acting as the holder, as before locks.
 
 ### Checked against Claude Code 2.1.330
 
@@ -69,9 +74,7 @@ Built app, real Claude Code 2.1.330 on Haiku, in a scratch Git folder.
 ### Known gaps
 
 - After `/clear`, the tab saves the new conversation only at its next prompt. Quitting before that resumes the conversation from before `/clear`.
-- A second window on a Folder that is already open resumes the same conversations, so two Claude Code processes share one session and transcript, and both windows overwrite the layout file. Follow-up: [#29](https://github.com/karsanda/blueprint/issues/29).
 - Blueprint only checks that the transcript file exists. If Claude Code still refuses the conversation, the tab shows Claude Code exited (code 1) at that reopen, and Restart starts a new conversation.
-- The review keeps its records only while Blueprint runs. After reopening, This session starts over, so Changes made before closing are not listed.
 
 ## Learning the status
 
@@ -90,7 +93,7 @@ A Claude session shows idle once its terminal runs. There is no `SessionStart` h
 | `Notification`, any other type | none | |
 | `PostToolUse` | working, but never clears Needs you | record the paths Claude touched |
 | `PostToolUseFailure` for `Bash` | none | take the snapshot after the command, like `PostToolUse` |
-| `Stop` | idle | refresh the review |
+| `Stop` | idle, or Needs you when `last_assistant_message` ends on a question | refresh the review |
 | The Developer types a key in a pane that shows Needs you | working | |
 | The transcript gains a line starting `[Request interrupted by user` | idle | |
 
@@ -121,6 +124,22 @@ Checked on 2026-11-21 with a real session whose hooks logged every event:
   - The late file of a background command counted as outside Claude.
   - This turn did not reset when the background command ended.
 - The Agent tool can run a subagent in the background. Its tool hooks and permission prompts then arrive after the turn that started it ended.
+
+### Questions in plain text
+
+Claude Code sometimes asks the Developer in plain text and ends its turn ([#16](https://github.com/karsanda/blueprint/issues/16)). No hook says it waits, but `Stop` carries `last_assistant_message`, the text of Claude's final response (Claude Code's hooks reference). When its last line ends in a question mark, past closing Markdown or quote marks such as `**`, `)` or `”`, the session shows Needs you instead of idle, with the desktop notification. A question earlier in the text, followed by a statement, does not count.
+
+Not covered: the folder-trust question and the sign-in. Claude Code holds back every hook until the Developer accepts the trust question, and no hook or signal reports either one.
+
+### Blocked hooks
+
+Some of Claude Code's settings keep Blueprint's hooks from running ([#15](https://github.com/karsanda/blueprint/issues/15)). The status then never changes, and the review cannot tell Claude's Changes. When a Claude session starts, main reads the settings files and the pane names what blocks the hooks, with a Dismiss button. The rules follow Claude Code's settings reference (checked 2026-11-22):
+
+- `allowManagedHooksOnly`, a managed-only key: any managed file setting it true blocks every hook not managed.
+- `disableAllHooks`: the value of the strongest scope that sets it counts, in the order managed, `.claude/settings.local.json`, `.claude/settings.json`, then the user's `settings.json`. Within managed settings a later drop-in wins. A project's `false` overrides the user's `true`.
+- `allowedHttpHookUrls`: lists from every file merge. When any file sets it, a hook runs only if its URL matches one pattern, where `*` stands for any text.
+- Files: `/etc/claude-code/managed-settings.json` on Linux and `/Library/Application Support/ClaudeCode/managed-settings.json` on macOS, each followed by the `*.json` files of `managed-settings.d` beside it, in name order, hidden ones left out. The user's file is in `$CLAUDE_CONFIG_DIR`, or else `~/.claude`.
+- Known gap: settings from a macOS configuration profile or from the organization's server cannot be read, so they are not checked. Whether `disableAllHooks` reaches hooks given with `--settings` is not documented; Blueprint assumes it does.
 
 ### Rules
 
@@ -156,7 +175,6 @@ Drafted, not built: detail for [Give a session its own working copy](../../useca
 ## Open checks
 
 - A real desktop notification on GNOME, and clicking it to focus the session, is not yet verified by hand.
-- Managed settings can block Blueprint's hooks (`allowedHttpHookUrls`, `allowManagedHooksOnly`). The sessions then never change status.
-- The Developer's own `disableAllHooks` setting silences Blueprint's hooks too. The sessions then never change status.
+- Whether `disableAllHooks`, `allowManagedHooksOnly` and `allowedHttpHookUrls` stop hooks given with `--settings`, as Blueprint assumes (see Blocked hooks), is not yet checked against real Claude Code.
 - `elicitation_dialog` (an MCP server asking for input) is untested. It may fire `PermissionRequest` too.
 - The merge check used a folder's settings, not the Developer's `~/.claude/settings.json`. Both go through the same merge, so it should hold. The real-app check used a folder's settings again.
