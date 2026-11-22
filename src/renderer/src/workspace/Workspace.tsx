@@ -23,6 +23,7 @@ import { TerminalPanel } from '../terminal/TerminalPanel'
 import { addDefaultPanels } from './defaultLayout'
 import { installLayoutSaving, restoreLayout } from './persist'
 import { CloseDialog, requestClose } from './CloseDialog'
+import { installKeys } from './commands'
 import { GroupActions } from './GroupActions'
 import { tabKind } from './sessions'
 import { useWorkspaceApi } from './workspaceApi'
@@ -178,6 +179,7 @@ export function Workspace() {
             installTitle(e.api)
             installReviewFollow(e.api)
             installNotifications(e.api)
+            installKeys(e.api)
             useWorkspaceApi.setState({ api: e.api })
           })()
         }}
