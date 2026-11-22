@@ -1,6 +1,6 @@
 import * as pty from 'node-pty'
 import type { ExitInfo } from '../../shared/api'
-import { foregroundProgram } from './foreground'
+import { foregroundProgram, foregroundProgramMac } from './foreground'
 import type { SpawnSpec } from './spec'
 
 /** Where terminal output and exits go: the window, in the app. */
@@ -50,10 +50,14 @@ export class TerminalManager {
     this.terminals.get(tabId)?.resize(clampSize(cols), clampSize(rows))
   }
 
-  /** The program a tab's terminal runs in its foreground, or null when its shell has the foreground or it has none. */
-  foreground(tabId: string): string | null {
+  /**
+   * The program a tab's terminal runs in its foreground, or null when its shell has the foreground or it has
+   * none: from /proc on Linux, from `ps` on macOS.
+   */
+  async foreground(tabId: string): Promise<string | null> {
     const term = this.terminals.get(tabId)
-    return term ? foregroundProgram(term.pid) : null
+    if (!term) return null
+    return process.platform === 'darwin' ? foregroundProgramMac(term.pid) : foregroundProgram(term.pid)
   }
 
   kill(tabId: string): void {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { foregroundProgram } from './foreground'
+import { foregroundFromPs, foregroundProgram, foregroundProgramMac } from './foreground'
 
 /** A `read` that serves these files and fails for any other path, as a missing /proc entry does. */
 function files(map: Record<string, string>): (path: string) => string {
@@ -58,5 +58,52 @@ describe('foregroundProgram', () => {
   it('a foreground group with no process left runs nothing', () => {
     const read = files({ '/proc/100/stat': '100 (zsh) S 1 100 100 34816 205 4194560' })
     expect(foregroundProgram(100, read, () => ['1', '100'])).toBeNull()
+  })
+})
+
+/** A `ps -A -o pid=,pgid=,tpgid=,comm=` listing of these rows. */
+const ps = (...rows: [number, number, number, string][]) =>
+  rows
+    .map(
+      ([pid, pgid, tpgid, comm]) =>
+        `${String(pid).padStart(5)} ${String(pgid).padStart(5)} ${String(tpgid).padStart(5)} ${comm}`,
+    )
+    .join('\n')
+
+describe('foregroundFromPs', () => {
+  it('ps: a shell at its prompt runs nothing', () => {
+    expect(foregroundFromPs(100, ps([100, 100, 100, '/bin/zsh'], [7, 7, -1, '/sbin/launchd']))).toBeNull()
+  })
+
+  it('ps: the program in the foreground group is named', () => {
+    expect(foregroundFromPs(100, ps([100, 100, 205, '-zsh'], [205, 205, 205, '/usr/bin/vim']))).toBe('vim')
+  })
+
+  it('ps: a pipeline whose leader ended names the next member', () => {
+    const output = ps(
+      [100, 100, 205, '/bin/zsh'],
+      [207, 205, 205, '/usr/bin/sort'],
+      [206, 205, 205, '/usr/bin/less'],
+    )
+    expect(foregroundFromPs(100, output)).toBe('less')
+  })
+
+  it('ps: a name with spaces is kept whole', () => {
+    const output = ps(
+      [100, 100, 205, '/bin/zsh'],
+      [205, 205, 205, '/Applications/Some App.app/Contents/MacOS/Some App'],
+    )
+    expect(foregroundFromPs(100, output)).toBe('Some App')
+  })
+
+  it('ps: no row for the shell, or no foreground group, runs nothing', () => {
+    expect(foregroundFromPs(100, ps([205, 205, 205, '/usr/bin/vim']))).toBeNull()
+    expect(foregroundFromPs(100, ps([100, 100, 0, '/bin/zsh']))).toBeNull()
+    expect(foregroundFromPs(100, ps([100, 100, -1, '/bin/zsh']))).toBeNull()
+    expect(foregroundFromPs(100, ps([100, 100, 205, '/bin/zsh']))).toBeNull()
+  })
+
+  it('ps: a listing that fails runs nothing', async () => {
+    expect(await foregroundProgramMac(100, () => Promise.reject(new Error('timed out')))).toBeNull()
   })
 })

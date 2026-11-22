@@ -74,3 +74,8 @@ test('shellSpec uses $SHELL', () => {
 test('shellSpec falls back to the account shell', () => {
   expect(shellSpec('/work/proj', {}).file).toBe(userInfo().shell ?? '/bin/sh')
 })
+
+test('shells start as login shells on macOS only', () => {
+  expect(shellSpec('/work/proj', { SHELL: '/bin/zsh' }, 'darwin').args).toEqual(['-l'])
+  expect(shellSpec('/work/proj', { SHELL: '/bin/zsh' }, 'linux').args).toEqual([])
+})

@@ -69,7 +69,12 @@ export function claudeSpec(
   }
 }
 
-export function shellSpec(folder: string, base: NodeJS.ProcessEnv): SpawnSpec {
+export function shellSpec(
+  folder: string,
+  base: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform = process.platform,
+): SpawnSpec {
   const file = base['SHELL'] || userInfo().shell || '/bin/sh'
-  return { file, args: [], cwd: folder, env: terminalEnv(base) }
+  // On macOS shells start as login shells, as Terminal.app starts them, so ~/.zprofile runs (Homebrew's PATH).
+  return { file, args: platform === 'darwin' ? ['-l'] : [], cwd: folder, env: terminalEnv(base) }
 }
