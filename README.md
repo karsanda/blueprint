@@ -12,6 +12,7 @@ Blueprint needs [Claude Code](https://docs.anthropic.com/en/docs/claude-code), i
 
 - **Ubuntu** (amd64):
   - `sudo apt install ./blueprint_<version>_amd64.deb`
+  - if apt ends with "Download is performed unsandboxed as root", the install still worked. apt's own user can't read your home folder, so apt read the file as root.
   - then `blueprint ~/path/to/project`, or open Blueprint from the app menu and pick a folder.
 - **macOS** (Apple Silicon):
   - open the `.dmg` and drag Blueprint into Applications;
