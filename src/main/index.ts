@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
 import { app, BrowserWindow, dialog, Menu, net, protocol, screen, shell, type WebContents } from 'electron'
 import type { WindowBounds } from '../shared/api'
-import { detachedArgs, devUserData, shouldDetach } from './detach'
+import { detachedArgs, devUserData, shouldDetach, takeDetachMarker } from './detach'
 import { loginEnvironment, mergeEnvironment, needsLoginEnvironment } from './environment'
 import { resolveFolder } from './folder'
 import { macMenuTemplate } from './menu'
@@ -86,7 +86,8 @@ function guardWindow(
 }
 
 // `blueprint <folder>` from a terminal: hand over to a detached copy and give the prompt back.
-if (shouldDetach({ packaged: app.isPackaged, stdinIsTTY: process.stdin.isTTY, env: process.env })) {
+const isCopy = takeDetachMarker(process.env)
+if (shouldDetach({ packaged: app.isPackaged, stdinIsTTY: process.stdin.isTTY, isCopy })) {
   spawn(process.execPath, detachedArgs(process.argv, process.cwd()), {
     detached: true,
     stdio: 'ignore',

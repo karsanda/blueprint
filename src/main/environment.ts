@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 
@@ -49,15 +49,54 @@ export function mergeEnvironment(
   return merged
 }
 
-const run: Runner = (file, args) =>
-  new Promise((resolve, reject) => {
-    execFile(
-      file,
-      args,
-      { cwd: homedir(), timeout: LIMIT_MS, maxBuffer: 1024 * 1024, encoding: 'utf8' },
-      (err, stdout) => (err ? reject(err) : resolve(stdout)),
-    )
-  })
+/**
+ * Runs the login shell so that nothing in the Developer's rc files can hold Blueprint back:
+ * - it reads no input (an rc that asks gets end of file at once);
+ * - it runs in a process group of its own, which is killed outright at the limit (an interactive shell
+ *   ignores SIGTERM, and a slow command in an rc file would otherwise run on);
+ * - the answer is the output so far, once the shell exits or the limit passes, whichever comes first.
+ */
+export function shellRunner({
+  limitMs = LIMIT_MS,
+  cwd = homedir(),
+  env = process.env,
+}: { limitMs?: number; cwd?: string; env?: NodeJS.ProcessEnv } = {}): Runner {
+  return (file, args) =>
+    new Promise((resolve, reject) => {
+      const child = spawn(file, args, { cwd, env, detached: true, stdio: ['ignore', 'pipe', 'ignore'] })
+      let output = ''
+      const killGroup = (): void => {
+        try {
+          if (child.pid !== undefined) process.kill(-child.pid, 'SIGKILL')
+        } catch {
+          // The group has already gone.
+        }
+      }
+      const timer = setTimeout(() => {
+        killGroup()
+        reject(new Error(`The login shell took longer than ${limitMs} ms`))
+      }, limitMs)
+      // Output already written may still be in the pipe when the shell exits: take it once the pipe closes.
+      const done = (): void => resolve(output)
+      child.stdout.setEncoding('utf8')
+      child.stdout.on('data', (chunk: string) => {
+        output += chunk
+      })
+      child.on('error', (err) => {
+        clearTimeout(timer)
+        reject(err)
+      })
+      child.on('exit', () => {
+        clearTimeout(timer)
+        // Programs the rc files left behind in the shell's group go with it.
+        killGroup()
+        child.stdout.once('close', done)
+        setTimeout(done, 100)
+      })
+    })
+}
+
+const run: Runner = shellRunner()
 
 /**
  * The Developer's login shell's environment: the shell runs once, interactive and as a login shell, so

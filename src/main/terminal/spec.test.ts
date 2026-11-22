@@ -79,3 +79,13 @@ test('shells start as login shells on macOS only', () => {
   expect(shellSpec('/work/proj', { SHELL: '/bin/zsh' }, 'darwin').args).toEqual(['-l'])
   expect(shellSpec('/work/proj', { SHELL: '/bin/zsh' }, 'linux').args).toEqual([])
 })
+
+test('a macOS Blueprint opened from Finder gives its terminals a UTF-8 locale', () => {
+  expect(terminalEnv({}, 'darwin', 'pt-BR')['LANG']).toBe('pt_BR.UTF-8')
+  expect(terminalEnv({}, 'darwin', 'en')['LANG']).toBe('en_US.UTF-8')
+  // A locale the Developer set is theirs.
+  expect(terminalEnv({ LC_ALL: 'C' }, 'darwin', 'pt-BR')['LANG']).toBeUndefined()
+  expect(terminalEnv({ LANG: 'de_DE.UTF-8' }, 'darwin', 'pt-BR')['LANG']).toBe('de_DE.UTF-8')
+  // Ubuntu's desktop always gives one.
+  expect(terminalEnv({}, 'linux', 'pt-BR')['LANG']).toBeUndefined()
+})

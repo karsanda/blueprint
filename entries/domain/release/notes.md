@@ -30,7 +30,7 @@ The first release is `v0.1.0`, the MVP, for the Developer's own Ubuntu and macOS
   - then the first process exits, which gives the prompt back;
   - closing the terminal then ends neither Blueprint nor its Claude sessions.
 
-  A marker in the environment keeps the second start from detaching again. Unpackaged runs (`pnpm dev`, e2e) never detach.
+  A marker in the environment keeps the second start from detaching again; the second start then removes it, so `blueprint <folder>` typed in one of Blueprint's own shells detaches too. Unpackaged runs (`pnpm dev`, e2e) never detach.
 - Ubuntu: the `.deb`'s standard `/usr/bin/blueprint` link to the app is the command.
 - macOS: a `.dmg` cannot put a command on the `PATH`, and a link straight to the binary inside `Blueprint.app` stops it finding its own bundle.
   - So the app carries a two-line script at `Blueprint.app/Contents/Resources/bin/blueprint`, which runs `Blueprint.app/Contents/MacOS/Blueprint` with its arguments.
@@ -78,8 +78,10 @@ The first release is `v0.1.0`, the MVP, for the Developer's own Ubuntu and macOS
   - The run is interactive (`$SHELL -i -l -c`), and Blueprint reads the environment it prints between two markers.
   - Blueprint takes that shell's `PATH`, and every other variable its own environment lacks.
   - The run gets 5 seconds. If it fails or runs out of time, Blueprint goes on with the environment it has.
+  - Nothing in the rc files can hold Blueprint back: the shell reads no input (an rc file that asks gets end of file), and runs in a process group of its own, which is killed outright at the limit. An interactive shell ignores SIGTERM, so a plain timeout would let a slow rc file run on.
 - Started from a terminal, as the `blueprint` command is, the environment is already full, and Blueprint skips the run.
 - On macOS, shells start as login shells (`-l`), as Terminal.app starts them, so `~/.zprofile` runs (Homebrew puts its `PATH` there). Ubuntu keeps today's shells.
+- On macOS, when no locale is set (`LANG`, `LC_ALL` and `LC_CTYPE` all missing, as for an app opened from Finder), terminals get `LANG` as the system locale in UTF-8, for example `pt_BR.UTF-8`; Terminal.app does the same.
 
 ### A busy shell
 
@@ -126,3 +128,6 @@ These were not checked: there is no Mac here, and CI cannot do them.
 - The first open after Gatekeeper.
 - A desktop notification, and a click on it.
 - Real Claude Code started from a Finder-opened Blueprint, finding its tools.
+- In a shell of a Finder-opened Blueprint, `locale` shows a UTF-8 `LANG` (Blueprint sets one when macOS gives none).
+- After `blueprint <folder>`, the new window comes to the front.
+- `blueprint ~/other`, typed in one of Blueprint's own shells, opens a second Blueprint and gives that shell its prompt back.

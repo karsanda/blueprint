@@ -16,7 +16,7 @@ Blueprint needs [Claude Code](https://docs.anthropic.com/en/docs/claude-code), i
 - **macOS** (Apple Silicon):
   - open the `.dmg` and drag Blueprint into Applications;
   - it is not signed with a Developer ID, so allow its first open in System Settings › Privacy & Security;
-  - for the `blueprint` command, link it once: `ln -s /Applications/Blueprint.app/Contents/Resources/bin/blueprint ~/.local/bin/blueprint`.
+  - for the `blueprint` command, link it once into a folder on your `PATH`, for example `mkdir -p ~/.local/bin && ln -s /Applications/Blueprint.app/Contents/Resources/bin/blueprint ~/.local/bin/blueprint` (a stock Mac has no `~/.local/bin` on its `PATH`: add it in `~/.zprofile`, or link into `/usr/local/bin` with `sudo`).
 
 `blueprint <folder>` gives the prompt back at once, and each Folder opens in its own window. The keys are in the [release notes](doc/releases/v0.1.0.md#keys).
 
