@@ -179,14 +179,24 @@ Checked on 2026-11-21 with the built app, Claude Code 2.1.330 in manual mode, an
 
 ## Working copies
 
-Drafted, not built: detail for [Give a session its own working copy](../../usecase/blueprint/give_a_session_its_own_working_copy.md). A working copy is a Git worktree on a branch of its own.
+Retired before it was built (2026-11-22), kept in case it returns: detail for [Give a session its own working copy](../../usecase/blueprint/give_a_session_its_own_working_copy.md). A working copy is a Git worktree on a branch of its own. The decisions are in the use case; this is how they would be met. Today the Developer gets the same apart by hand: `git worktree add ../<project>-b`, then `blueprint ../<project>-b`, a Folder of its own.
 
-- Two ways to make one:
-  - Blueprint runs `git worktree add -b <branch> <path>` and starts `claude` with the worktree as its working directory. Blueprint then owns the path, the branch name and the removal.
-  - Claude Code makes its own: 2.1.330 has `-w, --worktree [name]`, which "creates a git worktree for this session". Its place and branch name are Claude Code's, so Blueprint would have to learn them, for example from a hook's `cwd`.
-- Resume: Claude Code files a transcript under the project directory it ran in (`~/.claude/projects/<folder>/<id>.jsonl`, see Resume after reopening). A resumed session must start in the same worktree.
-- The review takes its snapshots of the Folder's repository today. A session in a worktree needs its own: the worktree has its own index and `HEAD`, and its Changes count from the branch's starting commit.
-- Taking the work uncommitted fits `git merge --squash` without a commit, run in the Folder. It stops, and changes nothing, when the Folder's own uncommitted edits touch the same files.
+- Blueprint makes the worktree itself (`git worktree add -b <branch> <path> HEAD`), not Claude Code:
+  - Blueprint then knows the path and the branch before Claude starts. The review takes the session base there before Claude's first edit, as it does in the Folder, and the tab shows the branch at once.
+  - Claude Code 2.1.330's own `-w, --worktree [name]`, checked on 2026-11-22: it made `.claude/worktrees/<name>` inside the repository, on branch `worktree-<name>`, locked. It stayed after the session ended, and the Folder's `git status` showed `.claude/` as untracked, so the review would list it as a Change.
+- Place: `<user data>/working-copies/<folderKey>/<tab id>`, outside the Folder, where neither `git status` nor the review sees it. `folderKey` is the layout file's name. The tab shows the path.
+- Branch: `blueprint/<tab id>`, such as `blueprint/claude-2`; another number when that branch exists. A renamed tab keeps its branch.
+- The copy starts from the Folder as it is. After `git worktree add` at `HEAD`, Blueprint writes the Folder's current snapshot tree into the worktree: tracked changes, deletions and untracked files Git does not ignore. It commits that tree on the copy's branch as its starting point. Git in the copy then shows only the session's own work, a kept branch holds the work, and the base survives runs in the repository. Side effect: the Folder's uncommitted work at that moment sits in a commit in the Developer's local repository.
+- Copy list: a file at the Folder's root, one path or glob per line, `#` for comments, as in `.gitignore`. Before choosing its name, check whether Claude Code reads such a file for its own worktrees; if it does, use the same name and format. Listed files are copied after the snapshot tree is written. A listed path Git tracks is skipped.
+- Claude starts with the worktree as its working directory. Hooks, the transcript (`~/.claude/projects/<worktree>/<id>.jsonl`) and resume all follow from that: a resumed session must start in the same worktree. The tab saves the worktree path beside its conversation.
+- The review gives each session in a worktree its own snapshot store, read against the worktree; the worktree has its own index and `HEAD`.
+- Taking the work: the difference between the starting commit and the worktree's current state is applied to the Folder with a three-way merge, after a check run first that changes nothing. A clash is the same lines changed on both sides; edits to different parts of a file merge. When any file clashes, nothing is applied and the files are named. Applied changes stay uncommitted, staged nowhere. A take moves the starting point to what was taken.
+- Catch up: the Folder's changes since the starting point are merged into the copy, clashes marked there, and the starting point moves to the Folder's state. A merge by hand would not do: the next take would clash on the same lines again.
+- A new session works in the Folder whenever no open Claude tab works there. Discarding the last Claude tab's copy restarts that tab in the Folder.
+- No guard against writes into the Folder: Claude Code asks before writing outside its working directory, and the copy is outside the Folder. Bash commands cannot be guarded.
+- Removing: `git worktree remove --force` and `git branch -D`, only after the Developer confirms a discard, or after the work was taken.
+- The first session never gets a worktree, and neither does any session when the Folder is not under Git.
+- Left to the builder: how the tab shows the branch and the path; what Take and Discard look like, and where; and how a kept copy whose session closed can be found again.
 
 ## Open checks
 

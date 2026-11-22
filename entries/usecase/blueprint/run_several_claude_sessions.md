@@ -64,7 +64,7 @@ Test cases:
 
 ## Known gaps
 
-- All sessions share one Folder. [Give a session its own working copy](give_a_session_its_own_working_copy.md) is drafted for after the MVP.
+- All sessions share one Folder. To keep a second session apart, the Developer opens Blueprint on a second working copy that Git makes. [Give a session its own working copy](give_a_session_its_own_working_copy.md) would do it in one window, and is retired.
 - While Claude Code runs a command for one session, another session's changes also count as the first session's.
 - An overlap warning stays until one of the two sessions closes or restarts.
 
