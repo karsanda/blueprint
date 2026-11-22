@@ -139,7 +139,9 @@ test('the layout is the same when the Developer reopens the Folder', async () =>
 test('a Folder opened for the first time gets the default layout', async () => {
   const first = await launch()
   await expect.poll(() => probeText(first.page, 'shell-1')).toContain('fake-shell ready')
-  await dropTab(first.page, 'Shell', 600, 300)
+  // The middle of the Claude pane, wherever the window's size puts it.
+  const claude = (await groupWith(first.page, 'Claude').boundingBox())!
+  await dropTab(first.page, 'Shell', claude.x + claude.width / 2, claude.y + claude.height / 2)
   await expect(first.page.locator('.dv-groupview')).toHaveCount(3)
   await first.page.waitForTimeout(1000)
   await first.app.close()

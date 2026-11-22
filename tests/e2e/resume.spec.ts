@@ -101,6 +101,7 @@ test('a saved id that is not a session id never reaches Claude Code', async () =
   const second = await relaunch(first)
   try {
     await expect(second.page.getByRole('status').filter({ hasText: NOTICE })).toBeVisible()
+    await expect.poll(() => readLog(second.log, 'claude.start')).not.toBe('')
     const args = startArgs(second.log, 'claude')
     expect(args).not.toContain('--dangerously-skip-permissions')
     expect(args).not.toContain('--resume')
