@@ -73,9 +73,9 @@ Covers: Alternative Flow 1, Alternative Flow 3, Alternative Flow 4.
 
 Work items:
 
-- [ ] Pick a preset from the top bar or with a key ([#14](https://github.com/karsanda/blueprint/issues/14))
-- [ ] Move focus, move and switch tabs, open tabs and zoom with keys ([#14](https://github.com/karsanda/blueprint/issues/14))
-- [ ] Float a pane, or pop it out into its own window ([#14](https://github.com/karsanda/blueprint/issues/14))
+- [x] Pick a preset from the top bar or with a key ([#14](https://github.com/karsanda/blueprint/issues/14))
+- [x] Move focus, move and switch tabs, open tabs and zoom with keys ([#14](https://github.com/karsanda/blueprint/issues/14))
+- [x] Float a pane, or pop it out into its own window ([#14](https://github.com/karsanda/blueprint/issues/14))
 
 Test cases:
 
