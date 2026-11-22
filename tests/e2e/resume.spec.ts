@@ -6,8 +6,9 @@ import { launch, type Launched, probeText, readLog, typeInto } from './launch'
 
 const NOTICE = 'The last conversation could not be found, so a new one started.'
 
-/** The args of the first start of one fake instance. */
-function startArgs(log: string, stem: string): string[] {
+/** The args of the first start of one fake instance, once it has written them. */
+async function startArgs(log: string, stem: string): Promise<string[]> {
+  await expect.poll(() => readLog(log, `${stem}.start`)).not.toBe('')
   const line = readLog(log, `${stem}.start`).trim().split('\n')[0] ?? '{}'
   const parsed: { args?: string[] } = JSON.parse(line)
   return parsed.args ?? []
@@ -58,7 +59,7 @@ test('a Claude session continues its conversation when the Developer reopens the
   const second = await relaunch(first)
   try {
     await expect.poll(() => probeText(second.page, 'claude-1')).toContain(`resumed ${id}`)
-    const args = startArgs(second.log, 'claude')
+    const args = await startArgs(second.log, 'claude')
     expect(args).toContain('--resume')
     expect(args[args.indexOf('--resume') + 1]).toBe(id)
     expect(args).not.toContain('--session-id')
@@ -77,7 +78,7 @@ test('a conversation that cannot be found starts a new one with a notice', async
   try {
     const notice = second.page.getByRole('status').filter({ hasText: NOTICE })
     await expect(notice).toBeVisible()
-    const args = startArgs(second.log, 'claude')
+    const args = await startArgs(second.log, 'claude')
     expect(args).toContain('--session-id')
     expect(args).not.toContain('--resume')
     await notice.getByRole('button', { name: 'Dismiss' }).click()
@@ -101,8 +102,7 @@ test('a saved id that is not a session id never reaches Claude Code', async () =
   const second = await relaunch(first)
   try {
     await expect(second.page.getByRole('status').filter({ hasText: NOTICE })).toBeVisible()
-    await expect.poll(() => readLog(second.log, 'claude.start')).not.toBe('')
-    const args = startArgs(second.log, 'claude')
+    const args = await startArgs(second.log, 'claude')
     expect(args).not.toContain('--dangerously-skip-permissions')
     expect(args).not.toContain('--resume')
   } finally {
@@ -124,8 +124,8 @@ test('each session resumes its own conversation', async () => {
     await expect.poll(() => probeText(second.page, 'claude-1')).toContain(`resumed ${id1}`)
     await expect.poll(() => probeText(second.page, 'claude-2')).toContain(`resumed ${id2}`)
     await openSecondSession(second.page, 'claude-3')
-    expect(startArgs(second.log, 'claude3')).toContain('--session-id')
-    expect(startArgs(second.log, 'claude3')).not.toContain('--resume')
+    expect(await startArgs(second.log, 'claude3')).toContain('--session-id')
+    expect(await startArgs(second.log, 'claude3')).not.toContain('--resume')
   } finally {
     await second.app.close()
   }
@@ -141,7 +141,7 @@ test('a restarted session starts a new conversation after reopening', async () =
   const second = await relaunch(first)
   try {
     await expect.poll(() => probeText(second.page, 'claude-1')).toContain('claude ready')
-    expect(startArgs(second.log, 'claude')).toContain('--session-id')
+    expect(await startArgs(second.log, 'claude')).toContain('--session-id')
     await expect(second.page.getByRole('status').filter({ hasText: NOTICE })).toHaveCount(0)
   } finally {
     await second.app.close()
@@ -181,7 +181,7 @@ test('a session that failed to start resumes its conversation on Restart', async
     )
     await second.page.getByRole('button', { name: 'Restart' }).click()
     await expect.poll(() => probeText(second.page, 'claude-1')).toContain(`resumed ${id}`)
-    const args = startArgs(second.log, 'claude')
+    const args = await startArgs(second.log, 'claude')
     expect(args).toContain('--resume')
     expect(args[args.indexOf('--resume') + 1]).toBe(id)
   } finally {

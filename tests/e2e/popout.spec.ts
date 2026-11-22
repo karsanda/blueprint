@@ -26,6 +26,15 @@ async function popOut(app: ElectronApplication, page: Page, title: string): Prom
   return pop
 }
 
+/** Puts the keyboard in a tab's terminal in `win`; a window that has just opened may take a moment to accept it. */
+async function focusTerminal(win: Page, tabId: string): Promise<void> {
+  const textarea = win.locator(`[data-tab="${tabId}"] .xterm-helper-textarea`)
+  await expect(async () => {
+    await textarea.focus()
+    await expect(textarea).toBeFocused({ timeout: 300 })
+  }).toPass()
+}
+
 /** Closes the pop-out windows from main, as the Developer closing them would. */
 async function closePopouts(app: ElectronApplication): Promise<void> {
   await app.evaluate(({ BrowserWindow }) => {
@@ -40,7 +49,7 @@ test('Pop out moves a pane into its own window, and closing it brings it back', 
   const pop = await popOut(app, page, 'Shell')
   await expect(pop.locator('[data-tab="shell-1"] .xterm')).toHaveCount(1)
   await expect(page.locator('[data-tab="shell-1"]')).toHaveCount(0)
-  await pop.locator('[data-tab="shell-1"] .xterm-helper-textarea').focus()
+  await focusTerminal(pop, 'shell-1')
   await pop.keyboard.type('x')
   await expect.poll(() => readLog(log, 'fake-shell.input')).toContain('x')
   // It draws there too: the fake shell answers `f` with a full-screen page.
@@ -68,7 +77,7 @@ test('keys work in a pop-out window', async () => {
   const { app, page } = await launch()
   await ready(page)
   const pop = await popOut(app, page, 'Shell')
-  await pop.locator('[data-tab="shell-1"] .xterm-helper-textarea').focus()
+  await focusTerminal(pop, 'shell-1')
   await pop.keyboard.press('Control+Shift+KeyT')
   await expect(pop.locator('[data-tab="shell-2"]')).toHaveCount(1)
   await expect.poll(() => probeText(page, 'shell-2')).toContain('fake-shell ready')
@@ -79,7 +88,7 @@ test('a pop-out window shows the same title', async () => {
   const { app, page } = await launch()
   await ready(page)
   const pop = await popOut(app, page, 'Claude')
-  await pop.locator('[data-tab="claude-1"] .xterm-helper-textarea').focus()
+  await focusTerminal(pop, 'claude-1')
   await pop.keyboard.type('?')
   await expect.poll(() => page.title()).toContain('Needs you')
   await expect.poll(() => pop.title()).toContain('Needs you')
@@ -111,7 +120,7 @@ test('closing a busy shell in a pop-out asks in that window', async () => {
   await expect.poll(() => probeText(page, 'claude-1')).toContain('claude ready')
   await groupWith(page, 'Shell').getByRole('button', { name: 'New shell' }).click()
   await expect.poll(() => probeText(page, 'shell-2')).toContain('$')
-  await page.locator('[data-tab="shell-2"] .xterm-helper-textarea').focus()
+  await focusTerminal(page, 'shell-2')
   await page.keyboard.type('sleep 3072')
   await page.keyboard.press('Enter')
   await expect.poll(() => page.evaluate(() => window.blueprint.foregroundProgram('shell-2'))).toBe('sleep')
@@ -184,11 +193,11 @@ test('a terminal opened in a pop-out still draws after the pop-out closes', asyn
   const { app, page, log } = await launch()
   await ready(page)
   const pop = await popOut(app, page, 'Shell')
-  await pop.locator('[data-tab="shell-1"] .xterm-helper-textarea').focus()
+  await focusTerminal(pop, 'shell-1')
   await pop.keyboard.press('Control+Shift+KeyT')
   await expect.poll(() => probeText(page, 'shell-2')).toContain('fake-shell ready')
   const inPopout = await probeRenders(page, 'shell-2')
-  await pop.locator('[data-tab="shell-2"] .xterm-helper-textarea').focus()
+  await focusTerminal(pop, 'shell-2')
   await pop.keyboard.type('f')
   await expect.poll(() => probeRenders(page, 'shell-2')).toBeGreaterThan(inPopout)
   await closePopouts(app)
@@ -211,10 +220,10 @@ test("direction keys skip a popped-out pane's empty place", async () => {
   const { app, page } = await launch()
   await ready(page)
   await popOut(app, page, 'Claude')
-  await page.locator('[data-tab="shell-1"] .xterm-helper-textarea').focus()
+  await focusTerminal(page, 'shell-1')
   await page.keyboard.press('Control+Shift+KeyH')
   await expect(groupWith(page, 'Changes')).toHaveClass(/dv-active-group/)
-  await page.locator('[data-tab="shell-1"] .xterm-helper-textarea').focus()
+  await focusTerminal(page, 'shell-1')
   await page.keyboard.press('Control+Shift+Alt+KeyH')
   await expect(groupWith(page, 'Changes').locator('.dv-tab', { hasText: 'Shell' })).toBeVisible()
   await expect(page.locator('[data-tab="shell-1"]')).toBeVisible()
