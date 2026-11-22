@@ -2,3 +2,5 @@ allowBuilds:
   electron: true
   esbuild: true
   node-pty: true
+  # electron-builder brings it for Windows installers, which Blueprint does not build.
+  electron-winstaller: false

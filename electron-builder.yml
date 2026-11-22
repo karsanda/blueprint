@@ -1,0 +1,38 @@
+# Packages the app electron-vite builds into out/. See entries/domain/release/notes.md.
+appId: io.github.karsanda.blueprint
+productName: Blueprint
+copyright: Copyright © 2026 Pinto Karsanda
+directories:
+  output: dist
+  buildResources: build
+files:
+  - out/**
+  - package.json
+# A native module cannot load from inside the archive.
+asarUnpack:
+  - node_modules/node-pty/**
+# node-pty's module uses Node-API, so the one pnpm installed works in Electron as it is.
+npmRebuild: false
+icon: build/icon.png
+publish: null
+
+linux:
+  target: deb
+  executableName: blueprint
+  category: Development
+  maintainer: Pinto Karsanda
+  # The window's WM_CLASS matches the desktop entry, so GNOME shows the app's icon and name for it.
+  syncDesktopName: true
+  synopsis: Claude Code, terminals and a review of what Claude changed, in one window
+deb:
+  packageName: blueprint
+
+mac:
+  target: dmg
+  category: public.app-category.developer-tools
+  # No Developer ID: an ad-hoc signature, which an arm64 app needs to start at all.
+  identity: '-'
+  hardenedRuntime: false
+  extraResources:
+    - from: build/bin/blueprint
+      to: bin/blueprint
