@@ -4,7 +4,7 @@
 ' View it with the PlantUML extension in VS Code, or render it with `plantuml -tsvg`.
 ' Smetana layout needs no Graphviz. SVGs are not committed.
 !pragma layout smetana
-left to right direction
+' Top to bottom: Smetana cuts the top off a left-to-right diagram that has a boundary box.
 skinparam shadowing false
 skinparam monochrome true
 
@@ -39,7 +39,7 @@ Know -- OS
 Shell -- OS
 Review -- Git
 
-' Hidden links fix the supporting actors' order, so no lines cross.
-ClaudeCode -[hidden]- OS
-OS -[hidden]- Git
+' Hidden links keep the supporting actors in one row under the System, in this order, so few lines cross.
+ClaudeCode -[hidden]right- OS
+OS -[hidden]right- Git
 @enduml
