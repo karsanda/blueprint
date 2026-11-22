@@ -14,7 +14,7 @@ export function LayoutMenu() {
         <ChevronDown size={12} strokeWidth={1.75} />
       </Menu.Trigger>
       <Menu.Portal>
-        <Menu.Positioner align="end" sideOffset={4}>
+        <Menu.Positioner align="end" sideOffset={4} className="z-[1000]">
           {/* The preset puts the keyboard where it belongs; the menu must not take it back to its button. */}
           <Menu.Popup
             finalFocus={false}

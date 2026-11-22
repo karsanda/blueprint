@@ -64,8 +64,9 @@ export function CloseDialog() {
   return (
     <Dialog.Root open={request !== null} onOpenChange={(open) => !open && dismiss()}>
       <Dialog.Portal>
-        <Dialog.Backdrop className="fixed inset-0 bg-black/40" />
-        <Dialog.Popup className="fixed top-1/2 left-1/2 w-80 -translate-x-1/2 -translate-y-1/2 border border-bp-line bg-bp-sheet p-4 text-bp-ink shadow-lg outline-none">
+        {/* Above dockview's floating panes (z-index 997). */}
+        <Dialog.Backdrop className="fixed inset-0 z-[1000] bg-black/40" />
+        <Dialog.Popup className="fixed top-1/2 left-1/2 z-[1000] w-80 -translate-x-1/2 -translate-y-1/2 border border-bp-line bg-bp-sheet p-4 text-bp-ink shadow-lg outline-none">
           <Dialog.Title className="text-sm font-semibold text-bp-head">
             {request ? `Close ${request.name}?` : ''}
           </Dialog.Title>
